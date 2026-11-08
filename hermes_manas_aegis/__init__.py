@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -263,6 +264,66 @@ def _intel_level_pill(level: str) -> str:
     return "pill-info"
 
 
+def _intel_level_label(level: str, lang: str = "en") -> str:
+    """Translate the intel level for display.
+
+    The level is data from CISA/NVD (English). The CISA level
+    "Actively exploited" gets a translated label; an NVD level like
+    "9.8 CRITICAL" keeps its numeric score and translates the
+    severity word via the sev_* keys.
+    """
+    lvl = (level or "").strip()
+    if not lvl:
+        return lvl
+    if lvl.upper() == "ACTIVELY EXPLOITED":
+        return t(lang, "intel_level_exploited")
+    m = re.match(r"^([\d.]+)\s+(\w+)\s*$", lvl)
+    if m:
+        score, word = m.group(1), m.group(2)
+        # NVD severity words: CRITICAL reuses sev_critical; HIGH /
+        # MEDIUM / LOW have their own intel_sev_* keys.
+        w = word.upper()
+        if w == "CRITICAL":
+            key = "sev_critical"
+        elif w in ("HIGH", "MEDIUM", "LOW"):
+            key = "intel_sev_" + w.lower()
+        else:
+            return lvl
+        if key in LANGS.get(lang, {}):
+            return f"{score} {t(lang, key)}"
+        return lvl
+    return lvl
+
+
+def _finding_text(f: Dict[str, Any], lang: str = "en") -> tuple:
+    """Render a scan finding's title + detail in the HUD language.
+
+    Key-based findings (v2.5.2+) render via t(); older stored rows
+    fall back to their stored text (they were migrated on load, but
+    an unmapped row still shows its original text rather than a key).
+    """
+    tkey = str(f.get("title_key", "") or "")
+    dkey = str(f.get("detail_key", "") or "")
+    params = f.get("params") or {}
+    if not isinstance(params, dict):
+        params = {}
+    if tkey:
+        try:
+            title = t(lang, tkey, **params)
+        except Exception:
+            title = str(f.get("title", tkey))
+    else:
+        title = str(f.get("title", ""))
+    if dkey:
+        try:
+            detail = t(lang, dkey, **params)
+        except Exception:
+            detail = str(f.get("detail", dkey))
+    else:
+        detail = str(f.get("detail", ""))
+    return title, detail
+
+
 def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> str:
     if lang not in {c for c, _ in SUPPORTED_LANGS}:
         lang = DEFAULT_LANG
@@ -443,17 +504,24 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
         sev = str(f.get("severity", "info"))
         sev_label = t(lang, "sev_" + sev) if "sev_" + sev in LANGS.get(lang, {}) else sev
         sev_pill = _sev_pill_class(sev)
-        fdetail = str(f.get("detail", ""))
+        ftitle, fdetail = _finding_text(f, lang)
         ffile = str(f.get("file", ""))
         fline = f.get("line")
         file_cell = html.escape(ffile)
         if fline is not None:
             file_cell += f":{fline}"
+        # R2.5.2: the check name is a translated label (was a raw
+        # English id), and the Detail cell shows the finding's title
+        # + detail (both translated) instead of the detail alone.
+        check = str(f.get("check", ""))
+        check_key = "check_" + check
+        check_label = t(lang, check_key) if check_key in LANGS.get(lang, {}) else check
         find_rows += (
             f'<tr><td>{html.escape(str(f.get("timestamp", "")))}</td>'
-            f"<td>{html.escape(str(f.get('check', '')))}</td>"
-            f'<td><span class="pill {sev_pill}">{html.escape(sev_label)}</span></td>' 
-            f"<td>{html.escape(fdetail)}</td>"
+            f"<td>{html.escape(check_label)}</td>"
+            f'<td><span class="pill {sev_pill}">{html.escape(sev_label)}</span></td>'
+            f"<td><strong>{html.escape(ftitle)}</strong><br>"
+            f'<span class="muted">{html.escape(fdetail)}</span></td>'
             f"<td>{file_cell}</td></tr>"
         )
 
@@ -468,7 +536,7 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
         intel_rows += (
             f"<tr><td>{html.escape(str(item.get('id', '')))}</td>"
             f"<td>{html.escape(str(product))}</td>"
-            f'<td><span class="pill {_intel_level_pill(str(item.get("level", "")))}">{html.escape(str(item.get("level", "")))}</span></td>' 
+            f'<td><span class="pill {_intel_level_pill(str(item.get("level", "")))}">{html.escape(_intel_level_label(str(item.get("level", "")), lang))}</span></td>' 
             f"<td>{html.escape(str(item.get('date', '')))}</td>"
             f"<td>{html.escape(str(item.get('description', ''))[:200])}</td></tr>"
         )
@@ -615,7 +683,7 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 <div class="note">{t(lang, "intel_note")}</div>
 </div>
 <div class="panel{" active" if active_tab == "find" else ""}" id="tab-find">
-{f'<div class="tablewrap"><table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>File</th></tr>{find_rows}</table></div>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
+{f'<div class="tablewrap"><table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>{t(lang, "findings_file")}</th></tr>{find_rows}</table></div>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
 </div>
 </main>
 </div>

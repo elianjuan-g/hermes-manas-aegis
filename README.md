@@ -1,6 +1,6 @@
 # Manas Aegis — Plugin Guardrail untuk Hermes Agent
 
-> **⚠️ ALPHA / PROTOTIPE — v2.5.1-alpha**
+> **⚠️ ALPHA / PROTOTIPE — v2.5.2-alpha**
 >
 > Plugin ini masih **prototipe eksperimental**. Pasang hanya kalau Anda
 > memilih ikut mencoba (**opt-in**), dan hanya di **lingkungan uji
@@ -142,7 +142,7 @@ Status:
   punya celah yang diketahui. Jangan diandalkan sebagai pengaman
   tunggal.
 - **planned** — hanya ada namanya di katalog aturan. **Tidak ada**
-  pemeriksaan yang berjalan di v2.5.1-alpha.
+  pemeriksaan yang berjalan di v2.5.2-alpha.
 
 | Aturan | Ancaman | Trigger | Tindakan | Status | Batas / bypass yang diketahui | Data yang dicatat |
 |---|---|---|---|---|---|---|
@@ -308,7 +308,7 @@ Tionghoa, Jepang, Korea, dan Vietnam.
 
 ## Desain HUD
 
-HUD didesain ulang di v2.5.1-alpha dari sistem desain **dashboard
+HUD didesain ulang di v2.5.0-alpha dari sistem desain **dashboard
 CISO C3iHub (IIT Kanpur, 2024)** — platform keamanan enterprise
 yang benar-benar dikirim ke klien (perusahaan asuransi
 internasional), bukan konsep Dribbble. Referensi:
@@ -501,11 +501,12 @@ Yang perlu Anda tahu soal privasi:
 - **Hermes 0.21.5 — dites di PC.** `hermes plugins validate`
   lolos sebagian; `hermes plugins doctor` gagal pada kwarg
   `parameters` (inti hook tetap jalan). Unit test di salinan kerja
-  rev1 ini: **32/32 lulus** (`python3 -m unittest discover`,
+  rev1 ini: **38/38 lulus** (`python3 -m unittest discover`,
   diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 + 11 tes R2 +
-  5 tes R2.5 + 4 tes baru R2.5.1 (sub-jumlah simulasi dengan string
-  verdict asli, param tab, redirect pindai). E2E HTTP nyata:
-  **19/19 lulus** (`/tmp/e2e-r251.py`).
+  5 tes R2.5 + 4 tes R2.5.1 (sub-jumlah simulasi dengan string
+  verdict asli, param tab, redirect pindai) + 5 tes baru R2.5.2
+  (bahasa temuan pindai, migrasi temuan lama, label level intel).
+  E2E HTTP nyata: **32/32 lulus** (`/tmp/e2e-r251.py`).
   Discovery dari root kini menemukan semua tes (dulu 0 — diperbaiki
   dengan `tests/__init__.py`). Cakupan tetap sempit: bypass yang
   diketahui (git chaining, `python -c`, SSRF fail-open) belum

@@ -1,5 +1,5 @@
 """
-Hermes Manas-Aegis Core Engine (v2.5.1-alpha Catalog-Validated Edition).
+Hermes Manas-Aegis Core Engine (v2.5.2-alpha Catalog-Validated Edition).
 Implements verifiable CWE, CAPEC, MITRE ATT&CK / ATLAS, OWASP Top 10,
 CVSS v3.1, CWSS, EPSS, CASS, CISA SSVC, and OASIS STIX 2.1 telemetry.
 All signature patterns are RFC4648 Base64-encoded at rest to prevent static scanner false positives.
@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from . import threat_intel as _threat_intel
+from .i18n import LANGS
 
 
 def _d(encoded: str) -> str:
@@ -203,6 +204,88 @@ THREAT_MATRIX: Dict[str, ThreatVectorSpec] = {
         status="planned",
     ),
 }
+
+
+# R2.5.2 (v2.5.2-alpha): migration for findings stored before the
+# key-based format (titles/details were hardcoded Indonesian). Maps an
+# old Indonesian title to (title_key, detail_key) and extracts the
+# substitution params from the stored title/detail so old findings
+# render in the HUD language too. Unmatched findings keep their
+# stored text (the HUD falls back to it).
+_OLD_FINDING_TITLES = [
+    # (title regex, title_key, detail_key, param extractor)
+    (r"^Berkas konfigurasi hilang: (.+)$", "scan_config_missing_title",
+     "scan_config_missing_detail", lambda m, d: {"fname": m.group(1)}),
+    (r"^Berkas konfigurasi berubah: (.+)$", "scan_config_changed_title",
+     "scan_config_changed_detail", lambda m, d: {"fname": m.group(1)}),
+    (r"^Berkas konfigurasi baru: (.+)$", "scan_config_new_title",
+     "scan_config_new_detail", lambda m, d: {"fname": m.group(1)}),
+    (r"^Decoy honeypot hilang: (.+)$", "scan_decoy_missing_title",
+     "scan_decoy_missing_detail", lambda m, d: {"decoy": m.group(1)}),
+    (r"^(\d+) aturan khusus tidak valid$", "scan_custom_invalid_title",
+     "scan_custom_invalid_detail",
+     lambda m, d: {"n": m.group(1), "error": d}),
+    (r"^Secret lolos ke telemetri \((.+)\)$", "scan_telemetry_secret_title",
+     "scan_telemetry_secret_detail",
+     lambda m, d: {"label": m.group(1),
+                   "ts": _ts_from_detail(d)}),
+    (r"^Pola injeksi directive di telemetri tersimpan$",
+     "scan_telemetry_injection_title", "scan_telemetry_injection_detail",
+     lambda m, d: {"ts": _ts_from_detail(d)}),
+    (r"^Simulasi terakhir hanya (\d+) dari (\d+) contoh cocok$",
+     "scan_sim_partial_title", "scan_sim_partial_detail",
+     lambda m, d: {"matched": m.group(1), "total": m.group(2)}),
+    (r"^Server HUD gagal bind$", "scan_hud_bind_title",
+     "scan_hud_bind_detail", lambda m, d: {}),
+    (r"^Berkas dapat ditulis semua pengguna: (.+)$",
+     "scan_state_writable_title", "scan_state_writable_detail",
+     lambda m, d: {"fname": m.group(1)}),
+    (r"^Firewall SSRF dimatikan$", "scan_ssrf_disabled_title",
+     "scan_ssrf_disabled_detail", lambda m, d: {}),
+    (r"^Pola injeksi prompt di berkas$", "scan_fs_injection_title",
+     "scan_fs_injection_detail", lambda m, d: {}),
+    (r"^Pola seperti token bomb di berkas$", "scan_fs_tokenbomb_title",
+     "scan_fs_tokenbomb_detail", lambda m, d: {}),
+    (r"^Blob teks raksasa di berkas$", "scan_fs_blob_title",
+     "scan_fs_blob_detail",
+     lambda m, d: {"line": _line_from_detail(d)}),
+    (r"^Kredensial \((.+)\) di berkas$", "scan_fs_credential_title",
+     "scan_fs_credential_detail", lambda m, d: {"label": m.group(1)}),
+]
+
+
+def _ts_from_detail(detail: str) -> str:
+    m = re.match(r"^Event (\S+) ", detail or "")
+    return m.group(1) if m else ""
+
+
+def _line_from_detail(detail: str) -> str:
+    m = re.search(r"Baris (\d+) ", detail or "")
+    return m.group(1) if m else ""
+
+
+def _migrate_old_finding(f: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach title_key/detail_key/params to a pre-v2.5.2 finding."""
+    if f.get("title_key"):
+        return f
+    title = str(f.get("title", ""))
+    detail = str(f.get("detail", ""))
+    for pattern, tkey, dkey, extract in _OLD_FINDING_TITLES:
+        m = re.match(pattern, title)
+        if not m:
+            continue
+        try:
+            params = extract(m, detail)
+        except Exception:
+            params = {}
+        # The fs_blob line also lives in the finding's own field.
+        if tkey == "scan_fs_blob_title" and not params.get("line"):
+            params["line"] = str(f.get("line", ""))
+        f["title_key"] = tkey
+        f["detail_key"] = dkey
+        f["params"] = params
+        return f
+    return f
 
 
 class ManasAegisCore:
@@ -660,7 +743,9 @@ class ManasAegisCore:
             self.last_scan = data["last_scan"]
         findings = data.get("findings")
         if isinstance(findings, list):
-            self.scan_findings = findings[-50:]
+            # R2.5.2: migrate pre-key findings so old rows render in the
+            # HUD language too instead of staying in hardcoded Indonesian.
+            self.scan_findings = [_migrate_old_finding(dict(f)) for f in findings[-50:] if isinstance(f, dict)]
 
     def _save_scan_state(self) -> None:
         path = self.state_dir / "scan_state.json"
@@ -739,10 +824,26 @@ class ManasAegisCore:
         notes: List[str] = []
         checks: List[str] = []
 
-        def add(severity: str, check: str, title: str, detail: str, file: str = "", line: int = 0) -> None:
+        def add(severity: str, check: str, title_key: str, detail_key: str, params: Optional[Dict[str, Any]] = None, file: str = "", line: int = 0) -> None:
+            # R2.5.2: findings are stored key-based so the HUD renders
+            # them in the viewer's language. The English text is kept
+            # as a readable fallback in the raw JSON.
+            params = dict(params or {})
+            en = LANGS["en"]
+            try:
+                title = en[title_key].format(**params)
+            except Exception:
+                title = title_key
+            try:
+                detail = en[detail_key].format(**params)
+            except Exception:
+                detail = detail_key
             findings.append({
                 "severity": severity,
                 "check": check,
+                "title_key": title_key,
+                "detail_key": detail_key,
+                "params": params,
                 "title": title,
                 "detail": str(self._redact_evidence(detail))[:300],
                 "file": file,
@@ -759,27 +860,28 @@ class ManasAegisCore:
                 notes.append("Baseline integritas konfigurasi dibuat dari kondisi saat ini.")
             for fname, saved_hash in baseline.items():
                 if fname not in current:
-                    add("warning", "config_integrity", f"Berkas konfigurasi hilang: {fname}",
-                        f"{fname} ada di baseline tapi tidak ditemukan sekarang.")
+                    add("warning", "config_integrity", "scan_config_missing_title",
+                        "scan_config_missing_detail", {"fname": fname})
                 elif current[fname] != saved_hash:
-                    add("critical", "config_integrity", f"Berkas konfigurasi berubah: {fname}",
-                        f"Hash {fname} berbeda dari baseline. Tinjau apakah perubahan ini disengaja.")
+                    add("critical", "config_integrity", "scan_config_changed_title",
+                        "scan_config_changed_detail", {"fname": fname})
             for fname in current:
                 if fname not in baseline:
-                    add("warning", "config_integrity", f"Berkas konfigurasi baru: {fname}",
-                        f"{fname} tidak ada di baseline. Bila disengaja, hapus cce_baseline.json untuk membuat baseline baru.")
+                    add("warning", "config_integrity", "scan_config_new_title",
+                        "scan_config_new_detail", {"fname": fname})
 
             checks.append("honeypot_decoys")
             for decoy in ("decoy_auth.json", "decoy.env"):
                 if not (self.honeypot_dir / decoy).exists():
-                    add("critical", "honeypot_decoys", f"Decoy honeypot hilang: {decoy}",
-                        "File umpan tidak ditemukan. Tanpa decoy, pengalihan kredensial tidak bisa berjalan.")
+                    add("critical", "honeypot_decoys", "scan_decoy_missing_title",
+                        "scan_decoy_missing_detail", {"decoy": decoy})
 
             checks.append("custom_rules")
             if self.custom_rule_errors:
-                add("warning", "custom_rules",
-                    f"{len(self.custom_rule_errors)} aturan khusus tidak valid",
-                    self.custom_rule_errors[0])
+                add("warning", "custom_rules", "scan_custom_invalid_title",
+                    "scan_custom_invalid_detail",
+                    {"n": str(len(self.custom_rule_errors)),
+                     "error": self.custom_rule_errors[0]})
             elif self.custom_rules:
                 notes.append(f"{len(self.custom_rules)} aturan khusus aktif.")
             if self.custom_overrides:
@@ -791,22 +893,25 @@ class ManasAegisCore:
                 for label, pat in self.SECRET_PATTERNS:
                     if pat.search(evidence):
                         add("critical", "telemetry_backstop",
-                            f"Secret lolos ke telemetri ({label})",
-                            f"Event {ev.get('timestamp', '')} menyimpan {label} yang seharusnya sudah disamarkan.")
+                            "scan_telemetry_secret_title",
+                            "scan_telemetry_secret_detail",
+                            {"label": label, "ts": str(ev.get("timestamp", ""))})
                         break
                 if self.MEMORY_DIRECTIVE_POISON.search(evidence):
                     add("critical", "telemetry_backstop",
-                        "Pola injeksi directive di telemetri tersimpan",
-                        f"Event {ev.get('timestamp', '')} menyimpan pola injeksi. Tinjau event tersebut.")
+                        "scan_telemetry_injection_title",
+                        "scan_telemetry_injection_detail",
+                        {"ts": str(ev.get("timestamp", ""))})
 
             checks.append("rules_selftest")
             last_sim = self.get_last_simulation()
             if last_sim is None:
                 notes.append("Belum pernah menjalankan simulasi — jalankan simulasi lokal untuk membuktikan aturan aktif.")
             elif last_sim["matched"] < last_sim["total"]:
-                add("warning", "rules_selftest",
-                    f"Simulasi terakhir hanya {last_sim['matched']} dari {last_sim['total']} contoh cocok",
-                    "Sebagian contoh simulasi tidak cocok dengan aturan. Tinjau aturan yang terlibat.")
+                add("warning", "rules_selftest", "scan_sim_partial_title",
+                    "scan_sim_partial_detail",
+                    {"matched": str(last_sim["matched"]),
+                     "total": str(last_sim["total"])})
 
         if scope == "full":
             checks.append("filesystem_content")
@@ -815,8 +920,8 @@ class ManasAegisCore:
         if scope == "network":
             checks.append("hud_loopback")
             if hud_ok is False:
-                add("critical", "hud_loopback", "Server HUD gagal bind",
-                    "Server HUD tidak dapat dimulai di 127.0.0.1:18777. Periksa apakah port sudah dipakai proses lain.")
+                add("critical", "hud_loopback", "scan_hud_bind_title",
+                    "scan_hud_bind_detail")
             elif hud_ok is None:
                 notes.append("Status server HUD tidak diketahui dari pindai ini.")
             checks.append("state_file_permissions")
@@ -829,12 +934,12 @@ class ManasAegisCore:
                         continue
                     if mode & 0o002:
                         add("warning", "state_file_permissions",
-                            f"Berkas dapat ditulis semua pengguna: {fname}",
-                            "Berkas state plugin bisa ditulis oleh pengguna lain di mesin ini.")
+                            "scan_state_writable_title",
+                            "scan_state_writable_detail", {"fname": fname})
             checks.append("ssrf_posture")
             if not self.config.get("ssrf_dns_firewall", True):
-                add("critical", "ssrf_posture", "Firewall SSRF dimatikan",
-                    "Pemeriksaan SSRF dinonaktifkan di konfigurasi. URL internal tidak akan diblokir.")
+                add("critical", "ssrf_posture", "scan_ssrf_disabled_title",
+                    "scan_ssrf_disabled_detail")
             ssrf_blocked = sum(
                 1 for e in self.events
                 if e.get("rule_id") == "MANAS-SSRF-SINKHOLE"
@@ -906,24 +1011,22 @@ class ManasAegisCore:
                 except Exception:
                     rel = str(fpath)
                 if self.MEMORY_DIRECTIVE_POISON.search(text):
-                    add("critical", "filesystem_content", "Pola injeksi prompt di berkas",
-                        "Berkas mengandung pola directive-injection (mis. perintah mengabaikan instruksi). Tinjau isi berkas.",
-                        file=rel)
+                    add("critical", "filesystem_content", "scan_fs_injection_title",
+                        "scan_fs_injection_detail", file=rel)
                 if self._TOKEN_BOMB_REPEAT.search(text):
-                    add("warning", "filesystem_content", "Pola seperti token bomb di berkas",
-                        "Berkas mengandung pengulangan token ekstrem. Bisa jadi umpan konteks (token bomb) atau data repetitif yang sah — tinjau.",
-                        file=rel)
+                    add("warning", "filesystem_content", "scan_fs_tokenbomb_title",
+                        "scan_fs_tokenbomb_detail", file=rel)
                 for lineno, line in enumerate(text.splitlines(), start=1):
                     if len(line) > 20000 and len(line.split()) < 5:
-                        add("warning", "filesystem_content", "Blob teks raksasa di berkas",
-                            f"Baris {lineno} sangat panjang tanpa spasi (blob). Bisa jadi muatan tersembunyi — tinjau.",
+                        add("warning", "filesystem_content", "scan_fs_blob_title",
+                            "scan_fs_blob_detail", {"line": str(lineno)},
                             file=rel, line=lineno)
                         break
                 if fpath.name not in cce_files:
                     for label, pat in self.SECRET_PATTERNS:
                         if pat.search(text):
-                            add("warning", "filesystem_content", f"Kredensial ({label}) di berkas",
-                                "Berkas mengandung pola kredensial. Bila bukan tempat kredensial semestinya, pindahkan ke penyimpanan rahasia.",
+                            add("warning", "filesystem_content", "scan_fs_credential_title",
+                                "scan_fs_credential_detail", {"label": label},
                                 file=rel)
                             break
 
@@ -941,7 +1044,7 @@ class ManasAegisCore:
         simulation_events = sum(1 for e in self.events if e.get("source") == "simulation")
         custom_rules = list(getattr(self, "custom_rules", []) or [])
         return {
-            "codename": "MANAS-AEGIS CORE v2.5.1-alpha",
+            "codename": "MANAS-AEGIS CORE v2.5.2-alpha",
             "alpha": True,
             "doctrine": self.config.get("tactical_doctrine", "counter_deceive").upper(),
             "cpe_23": f"cpe:2.3:a:nousresearch:hermes-agent:{hermes_ver}:*:*:*:*:*:*:*",

@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.5.1-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.5.2-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -167,7 +167,7 @@ class TestManasAegisR2(unittest.TestCase):
 
         self.assertEqual(DEFAULT_LANG, "en")
         en_keys = sorted(LANGS["en"])
-        self.assertEqual(len(en_keys), 115)
+        self.assertEqual(len(en_keys), 159)
         for code, _name in SUPPORTED_LANGS:
             self.assertEqual(sorted(LANGS[code]), en_keys, code)
         hud_en = build_analytical_hud_html(self.core)
@@ -464,7 +464,7 @@ class TestManasAegisR2(unittest.TestCase):
 
 
 class TestManasAegisR25(unittest.TestCase):
-    """R2.5 (v2.5.1-alpha): CISO-design HUD + dark/light themes.
+    """R2.5 (v2.5.2-alpha): CISO-design HUD + dark/light themes.
 
     The redesign is visual-only: same strings, same endpoints, same
     behavior. These tests pin the new design tokens and the theme
@@ -480,7 +480,7 @@ class TestManasAegisR25(unittest.TestCase):
 
     def test_theme_keys_in_all_languages(self):
         en_keys = set(LANGS["en"])
-        self.assertEqual(len(en_keys), 115)
+        self.assertEqual(len(en_keys), 159)
         for code, d in LANGS.items():
             self.assertEqual(set(d), en_keys, f"key mismatch in {code}")
             self.assertIn("theme_dark", d)
@@ -680,6 +680,119 @@ class TestManasAegisR251(unittest.TestCase):
         self.assertIn("u.searchParams.delete('q')", h)
         # The search form keeps the Activity tab.
         self.assertIn('<input type="hidden" name="tab" value="act">', h)
+
+
+class TestManasAegisR252(unittest.TestCase):
+    """R2.5.2 (v2.5.2-alpha): language completeness.
+
+    MyLord's report: the language feature is good but not uniform —
+    in English mode the Findings tab still showed Indonesian, and
+    vice versa. Root causes: (1) scan finding titles/details were
+    hardcoded Indonesian in core_engine.py; (2) the "File" column
+    header was hardcoded English; (3) check names were raw English
+    ids; (4) intel level strings came from CISA/NVD data in English.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.environ["HOME"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "HOME", None)
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+
+    def test_i18n_key_count(self):
+        # 115 (v2.5.0) + 41 scan/check/file/intel keys + 3 NVD severity words.
+        from hermes_manas_aegis.i18n import LANGS
+
+        en = LANGS["en"]
+        self.assertEqual(len(en), 159)
+        for code in LANGS:
+            self.assertEqual(len(LANGS[code]), 159, f"{code} key count differs")
+
+    def test_scan_findings_render_fully_translated(self):
+        # A fresh scan produces key-based findings; the HUD renders
+        # them in the viewer's language (en AND id, no cross-language
+        # leakage). Force a real finding: create config.yaml (the core
+        # snapshots it into the baseline at __init__), then delete it
+        # so the quick scan reports it missing.
+        hermes = Path(self.tmp.name) / ".hermes"
+        (hermes / "config.yaml").parent.mkdir(parents=True, exist_ok=True)
+        (hermes / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        # setUp's core already wrote an empty baseline (no config.yaml
+        # yet); delete it so the fresh core re-snapshots WITH the file.
+        baseline = Path(self.tmp.name) / "state" / "cce_baseline.json"
+        if baseline.exists():
+            baseline.unlink()
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+        (hermes / "config.yaml").unlink()
+        self.core.run_scan("quick")
+        h_en = build_analytical_hud_html(self.core, lang="en", active_tab="find")
+        h_id = build_analytical_hud_html(self.core, lang="id", active_tab="find")
+        # English render must not contain the old Indonesian finding text.
+        self.assertNotIn("Berkas konfigurasi", h_en)
+        self.assertNotIn("Pola injeksi", h_en)
+        self.assertNotIn("Decoy honeypot hilang", h_en)
+        # Indonesian render must not contain the English finding text.
+        self.assertNotIn("Configuration file", h_id)
+        self.assertNotIn("Honeypot decoy missing", h_id)
+        # Headers translated both ways.
+        self.assertIn("<th>Berkas</th>", h_id)
+        self.assertIn("<th>File</th>", h_en)
+        # Check names translated.
+        self.assertIn("Integritas konfigurasi", h_id)
+        self.assertIn("Config integrity", h_en)
+
+    def test_old_indonesian_findings_migrate(self):
+        # A pre-v2.5.2 finding (hardcoded Indonesian, no keys) is
+        # migrated on load and renders translated.
+        from hermes_manas_aegis.core_engine import _migrate_old_finding
+
+        old = {
+            "severity": "critical", "check": "config_integrity",
+            "title": "Berkas konfigurasi hilang: auth.json",
+            "detail": "auth.json ada di baseline tapi tidak ditemukan sekarang.",
+            "file": "", "line": 0,
+            "timestamp": "2026-11-09T00:00:00Z", "scope": "quick",
+        }
+        migrated = _migrate_old_finding(dict(old))
+        self.assertEqual(migrated["title_key"], "scan_config_missing_title")
+        self.assertEqual(migrated["params"], {"fname": "auth.json"})
+        from hermes_manas_aegis import _finding_text
+
+        title_en, detail_en = _finding_text(migrated, "en")
+        self.assertEqual(title_en, "Configuration file missing: auth.json")
+        title_id, detail_id = _finding_text(migrated, "id")
+        self.assertEqual(title_id, "Berkas konfigurasi hilang: auth.json")
+
+    def test_intel_level_labels_translate(self):
+        from hermes_manas_aegis import _intel_level_label
+
+        self.assertEqual(_intel_level_label("Actively exploited", "id"), "Dieksploitasi aktif")
+        self.assertEqual(_intel_level_label("9.8 CRITICAL", "id"), "9.8 Kritis")
+        self.assertEqual(_intel_level_label("7.5 HIGH", "id"), "7.5 Tinggi")
+        self.assertEqual(_intel_level_label("5.0 MEDIUM", "id"), "5.0 Sedang")
+        self.assertEqual(_intel_level_label("2.1 LOW", "id"), "2.1 Rendah")
+        self.assertEqual(_intel_level_label("9.8 CRITICAL", "en"), "9.8 Critical")
+
+    def test_scan_finding_has_keys_and_english_fallback(self):
+        # New findings carry keys AND a readable English fallback.
+        hermes = Path(self.tmp.name) / ".hermes"
+        (hermes / "config.yaml").parent.mkdir(parents=True, exist_ok=True)
+        (hermes / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        # setUp's core already wrote an empty baseline (no config.yaml
+        # yet); delete it so the fresh core re-snapshots WITH the file.
+        baseline = Path(self.tmp.name) / "state" / "cce_baseline.json"
+        if baseline.exists():
+            baseline.unlink()
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+        (hermes / "config.yaml").unlink()
+        self.core.run_scan("quick")
+        self.assertGreater(len(self.core.scan_findings), 0)
+        for f in self.core.scan_findings:
+            self.assertIn("title_key", f)
+            self.assertIn("detail_key", f)
+            self.assertIn("params", f)
+            self.assertTrue(str(f.get("title", "")), "English fallback title missing")
 
 
 if __name__ == "__main__":

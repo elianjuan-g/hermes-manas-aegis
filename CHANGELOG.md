@@ -5,6 +5,49 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.5.2-alpha] — 2026-11-09
+
+Revisi R2.5.2 (atas laporan MyLord: fitur bahasa bagus tapi tidak
+merata — mode English, tab Findings masih berbahasa Indonesia, dan
+sebaliknya). Empat sumber ketidakmerataan, semua diperbaiki.
+
+### Diperbaiki
+
+- **Judul + detail temuan pindai masih hardcode Indonesia.** 15
+  judul + 15 detail temuan (di `run_scan` dan `_scan_filesystem`)
+  kini disimpan berbasis kunci (`title_key`/`detail_key`/`params`)
+  dan dirender per bahasa di HUD. Teks Inggris disimpan sebagai
+  fallback yang terbaca di JSON mentah. Total kunci i18n: 115 →
+  **159** (41 kunci temuan/pemeriksaan/berkas/level + 3 kata
+  severity NVD).
+- **Header "File" hardcode Inggris.** Kini kunci `findings_file`
+  ("File" / "Berkas" / dst. di 15 bahasa).
+- **Nama pemeriksaan = ID Inggris mentah.** Kini label terjemahan
+  (`check_config_integrity` → "Config integrity" / "Integritas
+  konfigurasi", dst. untuk 9 pemeriksaan).
+- **Label level intel = data Inggris mentah.** Level CISA
+  "Actively exploited" dan level NVD "9.8 CRITICAL" kini
+  diterjemahkan (skor angka dipertahankan, kata severity
+  diterjemahkan: "9.8 Kritis" / "7.5 Tinggi" / "5.0 Sedang" /
+  "2.1 Rendah").
+- **Temuan lama (37 baris) ikut bermigrasi.** Temuan tersimpan
+  sebelum v2.5.2 (judul Indonesia, tanpa kunci) dipetakan saat
+  dimuat (`_migrate_old_finding`, 15 pola judul) sehingga ikut
+  tampil dalam bahasa HUD — bukan tetap Indonesia.
+- **Sel temuan menampilkan judul + detail.** Kolom Detail kini
+  menampilkan judul temuan (tebal) + detail (redup) — sebelumnya
+  hanya detail, jadi judul tidak pernah terlihat.
+
+### Catatan
+
+- Terjemahan untuk 13 bahasa selain en/id ditulis Ciel (bukan
+  penutur asli) — sama seperti kunci i18n sebelumnya.
+- **Unit test: 38/38 lulus** — 33 lama + 5 baru R2.5.2 (kelengkapan
+  159 kunci, render temuan penuh en+id tanpa bocor silang, migrasi
+  temuan lama, label level intel, kunci+fallback Inggris).
+  **E2E: 32/32 lulus** (HTTP nyata: render temuan en+id, header
+  Berkas/File, nama pemeriksaan, migrasi, level intel).
+
 ## [2.5.1-alpha] — 2026-11-09
 
 Revisi R2.5.1 (atas laporan MyLord + screenshot: simulasi sudah
