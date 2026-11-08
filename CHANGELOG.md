@@ -5,6 +5,52 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.5.0-alpha] — 2026-11-09
+
+Revisi R2.5 (atas perintah MyLord: "UI-UX nya jangan AI SLOP lah,
+cari design nya di figma atau apa gitu, pake yang profesional" +
+"tambahin tema gelap sama terang"): HUD didesain ulang dari sistem
+desain dashboard CISO C3iHub (IIT Kanpur, 2024 — platform keamanan
+enterprise yang benar-benar dikirim ke klien, bukan konsep Dribbble),
+plus tema gelap + terang. **Fungsi tidak berubah** — yang berubah
+hanya lapisan visual (warna, tipografi, layout, ikon).
+
+### Ditambah
+
+- **Tema gelap + terang.** Tombol tema di kanan atas (ikon matahari/
+  bulan, Lucide SVG). Pilihan tersimpan di browser
+  (`localStorage 'manas-aegis-theme'`) dan diterapkan sebelum
+  halaman pertama kali digambar (tanpa kedip). Default: gelap.
+  Tema terang memakai token yang sama (hue severity sama, digelapkan
+  agar kontras di latar putih; biru aksi tetap #0168FF).
+- **Ikon SVG profesional (Lucide, ISC).** Semua ikon emoji di HUD
+  (🔊 ▶ 🔍 ◆) diganti SVG inline (shield, activity, search, play,
+  volume, refresh, scan, trash, sun, moon — grid 24px, stroke 2,
+  currentColor), sesuai standing order ikon MyLord.
+
+### Diubah
+
+- **Sistem desain baru (referensi: CISO dashboard C3iHub).**
+  Halaman slate gelap #2A2C38, kartu #1E1F27, sidebar #1F1F3B,
+  biru aksi #0168FF, nav terpilih #2F2263. Satu skala severity di
+  semua tempat: Critical #F53821, High #FF9B10, Medium #FFCE20,
+  Low #00D796, Informative #80CAFF — dipakai di kartu KPI (garis
+  aksen kiri), badge sumber, badge severity temuan, dan badge level
+  intel. Warna kuat hanya untuk hal yang bermakna; biru hanya
+  untuk aksi.
+- **Tipografi profesional.** UI memakai sans-serif sistem (Inter/
+  Segoe UI); monospace hanya untuk nilai data (timestamp, ID,
+  evidence). Neon cyan (#00f5d4) dan latar hitam pekat (#040811)
+  dihapus — keduanya ciri khas "dashboard AI generik".
+- **Layout sidebar.** Navigasi (Activity / Threat intel / Findings)
+  pindah ke sidebar kiri tetap (seperti dashboard SOC sungguhan);
+  konten utama max-width 1120px. Di layar sempit (<760px) sidebar
+  runtuh jadi bar atas. Tabel dibungkus kartu (radius + border),
+  header huruf kapital kecil, baris hover, badge severity dengan
+  titik + label (bukan warna saja — aksesibel untuk buta warna).
+- **Unit test: 28/28 lulus** (6 V22 + 6 R1 + 11 R2 + 5 R2.5 baru).
+  **E2E: 36/36 lulus** (HTTP nyata: tema + desain + semua alur R2).
+
 ## [2.4.0-alpha] — 2026-11-09
 
 Revisi Fase R2 (atas permintaan MyLord, satu per satu dari chat):

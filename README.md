@@ -1,6 +1,6 @@
 # Manas Aegis — Plugin Guardrail untuk Hermes Agent
 
-> **⚠️ ALPHA / PROTOTIPE — v2.4.0-alpha**
+> **⚠️ ALPHA / PROTOTIPE — v2.5.0-alpha**
 >
 > Plugin ini masih **prototipe eksperimental**. Pasang hanya kalau Anda
 > memilih ikut mencoba (**opt-in**), dan hanya di **lingkungan uji
@@ -142,7 +142,7 @@ Status:
   punya celah yang diketahui. Jangan diandalkan sebagai pengaman
   tunggal.
 - **planned** — hanya ada namanya di katalog aturan. **Tidak ada**
-  pemeriksaan yang berjalan di v2.4.0-alpha.
+  pemeriksaan yang berjalan di v2.5.0-alpha.
 
 | Aturan | Ancaman | Trigger | Tindakan | Status | Batas / bypass yang diketahui | Data yang dicatat |
 |---|---|---|---|---|---|---|
@@ -305,6 +305,36 @@ Tionghoa, Jepang, Korea, dan Vietnam.
   dict Inggris (ada pemeriksaan otomatis yang menolak kunci yang
   hilang), lalu tambah pasangan `(kode, nama)` ke
   `SUPPORTED_LANGS` di file yang sama.
+
+## Desain HUD
+
+HUD didesain ulang di v2.5.0-alpha dari sistem desain **dashboard
+CISO C3iHub (IIT Kanpur, 2024)** — platform keamanan enterprise
+yang benar-benar dikirim ke klien (perusahaan asuransi
+internasional), bukan konsep Dribbble. Referensi:
+<https://fulloflyf.com/work/ciso-dashboard/> dan panduan
+<https://www.aufaitux.com/blog/cybersecurity-dashboard-ui-ux-design/>.
+
+- **Token warna (gelap):** halaman slate `#2A2C38`, kartu `#1E1F27`,
+  sidebar `#1F1F3B`, biru aksi `#0168FF`, nav terpilih `#2F2263`.
+- **Satu skala severity di semua tempat:** Critical `#F53821`,
+  High `#FF9B10`, Medium `#FFCE20`, Low `#00D796`,
+  Informative `#80CAFF` — dipakai di kartu KPI, badge sumber,
+  badge severity temuan, dan badge level intel. Warna kuat hanya
+  untuk hal yang bermakna; biru hanya untuk aksi. Badge selalu
+  punya titik + label (bukan warna saja).
+- **Tema gelap + terang.** Tombol tema di kanan atas HUD.
+  Tema terang: halaman `#F2F3F5`, kartu putih `#FFFFFF`,
+  sidebar putih; hue severity sama tapi digelapkan agar kontras
+  di latar putih. Pilihan tersimpan di browser (localStorage
+  `manas-aegis-theme`); default gelap.
+- **Tipografi:** UI sans-serif sistem (Inter/Segoe UI); monospace
+  hanya untuk nilai data (timestamp, ID, evidence).
+- **Ikon:** SVG inline gaya Lucide (grid 24px, stroke 2,
+  currentColor). Tidak ada emoji sebagai ikon.
+- **Layout:** sidebar kiri tetap (Activity / Threat intel /
+  Findings), konten max-width 1120px; di layar sempit (<760px)
+  sidebar runtuh jadi bar atas.
 
 ## Cara install
 
@@ -471,10 +501,10 @@ Yang perlu Anda tahu soal privasi:
 - **Hermes 0.21.5 — dites di PC.** `hermes plugins validate`
   lolos sebagian; `hermes plugins doctor` gagal pada kwarg
   `parameters` (inti hook tetap jalan). Unit test di salinan kerja
-  rev1 ini: **23/23 lulus** (`python3 -m unittest discover`,
-  diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 + 11 tes baru R2
-  (i18n, aturan khusus, pindai, arsip riwayat + pencarian, intel,
-  penjelasan). E2E HTTP nyata: **27/27 lulus** (`/tmp/e2e-r2.py`).
+  rev1 ini: **28/28 lulus** (`python3 -m unittest discover`,
+  diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 + 11 tes R2 +
+  5 tes baru R2.5 (token desain CISO, tema gelap/terang, badge
+  severity). E2E HTTP nyata: **36/36 lulus** (`/tmp/e2e-r25.py`).
   Discovery dari root kini menemukan semua tes (dulu 0 — diperbaiki
   dengan `tests/__init__.py`). Cakupan tetap sempit: bypass yang
   diketahui (git chaining, `python -c`, SSRF fail-open) belum

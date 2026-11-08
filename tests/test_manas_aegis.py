@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.4.0-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.5.0-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -17,8 +17,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hermes_manas_aegis import build_analytical_hud_html
+from hermes_manas_aegis import (
+    _intel_level_pill,
+    _sev_pill_class,
+    build_analytical_hud_html,
+)
 from hermes_manas_aegis.core_engine import THREAT_MATRIX, ManasAegisCore
+from hermes_manas_aegis.i18n import LANGS
 
 
 def _d(s: str) -> str:
@@ -162,7 +167,7 @@ class TestManasAegisR2(unittest.TestCase):
 
         self.assertEqual(DEFAULT_LANG, "en")
         en_keys = sorted(LANGS["en"])
-        self.assertEqual(len(en_keys), 111)
+        self.assertEqual(len(en_keys), 115)
         for code, _name in SUPPORTED_LANGS:
             self.assertEqual(sorted(LANGS[code]), en_keys, code)
         hud_en = build_analytical_hud_html(self.core)
@@ -456,6 +461,118 @@ class TestManasAegisR2(unittest.TestCase):
             self.assertFalse((state / "manas_telemetry_archive.jsonl").exists())
         finally:
             ManasAegisCore.TELEMETRY_LIVE_MAX = old_max
+
+
+class TestManasAegisR25(unittest.TestCase):
+    """R2.5 (v2.5.0-alpha): CISO-design HUD + dark/light themes.
+
+    The redesign is visual-only: same strings, same endpoints, same
+    behavior. These tests pin the new design tokens and the theme
+    machinery (keys, CSS variables, toggle, persistence).
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.environ["HOME"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "HOME", None)
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+
+    def test_theme_keys_in_all_languages(self):
+        en_keys = set(LANGS["en"])
+        self.assertEqual(len(en_keys), 115)
+        for code, d in LANGS.items():
+            self.assertEqual(set(d), en_keys, f"key mismatch in {code}")
+            self.assertIn("theme_dark", d)
+            self.assertIn("theme_light", d)
+            self.assertIn("nav_monitor", d)
+            self.assertIn("scan_title", d)
+        self.assertEqual(LANGS["en"]["theme_dark"], "Dark theme")
+        self.assertEqual(LANGS["en"]["theme_light"], "Light theme")
+        self.assertEqual(LANGS["id"]["theme_dark"], "Tema gelap")
+        self.assertEqual(LANGS["id"]["theme_light"], "Tema terang")
+
+    def test_hud_has_ciso_design_tokens_and_no_ai_slop(self):
+        h = build_analytical_hud_html(self.core, lang="en")
+        # CISO (C3iHub) tokens: deep slate page, dark cards, sidebar, blue actions.
+        for token in ("#2A2C38", "#1E1F27", "#1F1F3B", "#0168FF", "#2F2263"):
+            self.assertIn(token, h, f"missing CISO token {token}")
+        # One severity scale everywhere.
+        for sev in ("#F53821", "#FF9B10", "#FFCE20", "#00D796", "#80CAFF"):
+            self.assertIn(sev, h, f"missing severity color {sev}")
+        # AI-slop markers gone: no neon cyan, no monospace body, no emoji icons.
+        self.assertNotIn("#00f5d4", h)
+        self.assertNotIn("font-family:'JetBrains Mono'", h)
+        for emoji in ("🔊", "▶", "🔍", "◆"):
+            self.assertNotIn(emoji, h, f"emoji icon still present: {emoji}")
+        # Professional SVG icons (Lucide, stroke 2) present.
+        self.assertIn("<svg", h)
+        self.assertIn('stroke-width="2"', h)
+        # Sidebar layout + table wrappers + KPI accent bars.
+        self.assertIn('class="sidebar"', h)
+        self.assertIn('class="tablewrap"', h)
+        self.assertIn("--acc:var(--crit)", h)
+        self.assertIn('class="brand-mark"', h)
+
+    def test_hud_has_dark_light_theme_toggle(self):
+        h = build_analytical_hud_html(self.core, lang="en")
+        # Light theme variable block.
+        self.assertIn('[data-theme="light"]', h)
+        self.assertIn("--page:#F2F3F5", h)
+        self.assertIn("--card:#FFFFFF", h)
+        # Toggle button + persistence JS.
+        self.assertIn('id="themeBtn"', h)
+        self.assertIn("toggleTheme", h)
+        self.assertIn("manas-aegis-theme", h)
+        self.assertIn("applyTheme", h)
+        # Button shows the light-theme label by default (dark mode assumed).
+        self.assertIn("Light theme", h)
+        # Early head script applies the saved theme before first paint.
+        self.assertIn("localStorage.getItem('manas-aegis-theme')", h)
+
+    def test_hud_severity_pills(self):
+        # Findings severity -> pill class.
+        self.assertEqual(_sev_pill_class("critical"), "pill-crit")
+        self.assertEqual(_sev_pill_class("warning"), "pill-high")
+        self.assertEqual(_sev_pill_class("info"), "pill-info")
+        self.assertEqual(_sev_pill_class("unknown"), "pill-info")
+        # Intel level string -> pill class.
+        self.assertEqual(_intel_level_pill("9.8 CRITICAL"), "pill-crit")
+        self.assertEqual(_intel_level_pill("Actively exploited"), "pill-crit")
+        self.assertEqual(_intel_level_pill("7.5 HIGH"), "pill-high")
+        self.assertEqual(_intel_level_pill("5.0 MEDIUM"), "pill-med")
+        self.assertEqual(_intel_level_pill("2.0 LOW"), "pill-low")
+        self.assertEqual(_intel_level_pill(""), "pill-info")
+        # Rendered: seed one critical finding + one intel row, check pills.
+        self.core.scan_findings = [{
+            "timestamp": "2026-11-09T06:00:00Z", "check": "config_integrity",
+            "severity": "critical", "detail": "config changed", "file": "config.yaml",
+        }]
+        self.core.threat_intel = {
+            "fetched_at": "2026-11-09T00:00:00Z",
+            "items": [{"id": "CVE-2024-1234", "vendor": "Acme", "product": "Widget",
+                       "name": "Acme Widget RCE", "date": "2024-05-01",
+                       "level": "Actively exploited",
+                       "description": "A flaw.", "action": "", "source": "CISA KEV"}],
+            "sources": {"CISA KEV": {"ok": True, "count": 1, "error": ""}},
+        }
+        h = build_analytical_hud_html(self.core, lang="en")
+        self.assertIn("pill-crit", h)
+        self.assertIn("CVE-2024-1234", h)
+
+    def test_hud_strings_unchanged_after_redesign(self):
+        # Every user-visible string the R2 tests pin must survive the redesign.
+        h = build_analytical_hud_html(self.core, lang="en")
+        for s in (
+            "Protection for Hermes Agent activity",
+            "Run local simulation", "Quick scan", "Full scan", "Network scan",
+            "Activity", "Threat intel", "Findings",
+            "No activity matched the protection rules yet.",
+            "stored history, unlimited", "Latest global threat intel",
+            "for awareness only", "Search history",
+        ):
+            self.assertIn(s, h, f"missing string after redesign: {s}")
+        self.assertNotIn("max. 120", h)
 
 
 if __name__ == "__main__":

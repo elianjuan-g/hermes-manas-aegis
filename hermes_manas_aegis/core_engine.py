@@ -1,5 +1,5 @@
 """
-Hermes Manas-Aegis Core Engine (v2.4.0-alpha Catalog-Validated Edition).
+Hermes Manas-Aegis Core Engine (v2.5.0-alpha Catalog-Validated Edition).
 Implements verifiable CWE, CAPEC, MITRE ATT&CK / ATLAS, OWASP Top 10,
 CVSS v3.1, CWSS, EPSS, CASS, CISA SSVC, and OASIS STIX 2.1 telemetry.
 All signature patterns are RFC4648 Base64-encoded at rest to prevent static scanner false positives.
@@ -925,7 +925,7 @@ class ManasAegisCore:
         simulation_events = sum(1 for e in self.events if e.get("source") == "simulation")
         custom_rules = list(getattr(self, "custom_rules", []) or [])
         return {
-            "codename": "MANAS-AEGIS CORE v2.4.0-alpha",
+            "codename": "MANAS-AEGIS CORE v2.5.0-alpha",
             "alpha": True,
             "doctrine": self.config.get("tactical_doctrine", "counter_deceive").upper(),
             "cpe_23": f"cpe:2.3:a:nousresearch:hermes-agent:{hermes_ver}:*:*:*:*:*:*:*",

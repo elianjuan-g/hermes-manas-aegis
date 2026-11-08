@@ -117,59 +117,150 @@ def _custom_explain(entry: Dict[str, Any], lang: str = "en") -> Dict[str, str]:
 
 
 _HUD_CSS = """
-:root{--bg:#040811;--card:#0a1226;--line:#1b2a4a;--txt:#e8eefc;--mut:#8fa3c8;
---cyan:#00f5d4;--gold:#f59e0b;--crimson:#ff2a5f;--green:#34d399}
+/* Manas Aegis HUD — visual system adapted from the C3iHub CISO dashboard
+   (real shipped enterprise security platform, IIT Kanpur, 2024):
+   deep slate page, cards one step off the page, one severity scale used
+   on every card/table/progress element, blue reserved for actions.
+   No neon, no monospace UI, no emoji icons (Lucide SVG, stroke 2). */
+:root{--page:#2A2C38;--card:#1E1F27;--card2:#23242F;--sidebar:#1F1F3B;
+--line:#34364A;--line-soft:#2E3040;
+--txt:#EDEEF2;--mut:#9A9DB0;--mut2:#6E7186;
+--blue:#0168FF;--blue-hover:#2B7FFF;--nav-sel:#2F2263;--nav-sel-txt:#fff;
+--crit:#F53821;--high:#FF9B10;--med:#FFCE20;--low:#00D796;--info:#80CAFF;
+--danger:#E6292F;
+--btn-bg:#2B2D3A;--input-bg:#2B2D3A;--th-bg:rgba(255,255,255,.02);--row-hover:rgba(255,255,255,.02)}
+/* Light theme: same layout, same severity hues (darkened for contrast on
+   white), same blue for actions. Toggle button in the topbar; choice is
+   saved in the browser (localStorage 'manas-aegis-theme'). */
+[data-theme="light"]{--page:#F2F3F5;--card:#FFFFFF;--card2:#F8F9FA;--sidebar:#FFFFFF;
+--line:#DDE0E6;--line-soft:#E9EAEE;
+--txt:#17181D;--mut:#5B5E6E;--mut2:#8A8D9C;
+--blue:#0168FF;--blue-hover:#0A6CFF;--nav-sel:#E4EBFF;--nav-sel-txt:#0168FF;
+--crit:#D92D20;--high:#DC6803;--med:#B54708;--low:#067647;--info:#175CD3;
+--danger:#D92D20;
+--btn-bg:#FFFFFF;--input-bg:#FFFFFF;--th-bg:rgba(0,0,0,.02);--row-hover:rgba(0,0,0,.03)}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);font-family:'JetBrains Mono',ui-monospace,monospace;padding:18px}
-.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
-.badge{font-size:28px;color:var(--cyan)}
-h1{margin:0;font-size:22px;letter-spacing:.08em}
-.sub{color:var(--mut);font-size:12px;margin-top:4px}
-.sub2{color:var(--mut);font-size:11px;margin-top:2px}
-.btn{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:12px}
-.btn:hover{border-color:var(--cyan)}
-select{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:inherit;font-size:12px}
-.status{margin:16px 0 8px;font-size:12px;color:var(--mut)}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
-.kpi .n{font-size:26px;font-weight:700}
-.kpi .l{font-size:11px;color:var(--mut);margin-top:4px}
-.kpi .f{font-size:10px;color:var(--mut);margin-top:6px}
-.kpi .s{font-size:10px;color:var(--mut);margin-top:4px}
-.hist{font-size:11px;color:var(--mut);margin:8px 0}
-.scope{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0;font-size:12px}
-.scope h3{margin:0 0 6px;font-size:12px;color:var(--cyan)}
-.scope p{margin:4px 0;color:var(--mut)}
-.scanrow{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center}
-.scanline{font-size:11px;color:var(--mut);margin:6px 0}
-.search{display:flex;gap:8px;margin:10px 0;align-items:center}
-.search input{flex:1;background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:inherit;font-size:12px}
-.search a{color:var(--cyan);font-size:12px}
-.tabs{display:flex;gap:8px;margin:14px 0 8px}
-.tab{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:7px 14px;border-radius:8px 8px 0 0;cursor:pointer;font:inherit;font-size:12px}
-.tab.active{border-color:var(--cyan);color:var(--cyan)}
+body{margin:0;background:var(--page);color:var(--txt);font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.app{display:flex;min-height:100vh}
+.sidebar{width:224px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--line-soft);padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 10px 16px;border-bottom:1px solid var(--line-soft);margin-bottom:12px}
+.brand-mark{width:34px;height:34px;flex-shrink:0;border-radius:9px;background:var(--blue);display:flex;align-items:center;justify-content:center;color:#fff}
+.brand-mark svg{width:20px;height:20px}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:.03em;line-height:1.2}
+.brand-sub{font-size:11px;color:var(--mut);line-height:1.35;margin-top:2px}
+.nav-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut2);padding:10px 10px 6px}
+.tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;color:var(--mut);padding:10px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}
+.tab svg{width:16px;height:16px;flex-shrink:0}
+.tab:hover{background:var(--row-hover);color:var(--txt)}
+.tab.active{background:var(--nav-sel);color:var(--nav-sel-txt)}
+.sidebar-foot{margin-top:auto;font-size:11px;color:var(--mut2);padding:10px;line-height:1.5}
+.main{flex:1;min-width:0;padding:24px 28px 40px;max-width:1120px}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:13px;margin-top:4px}
+.sub2{color:var(--mut2);font-size:12px;margin-top:2px}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.actions label{font-size:12px;color:var(--mut)}
+.btn{background:var(--btn-bg);border:1px solid var(--line);color:var(--txt);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.btn:hover{border-color:var(--blue);color:#fff}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-hover);border-color:var(--blue-hover);color:#fff}
+select{background:var(--btn-bg);border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:inherit;font-size:13px}
+.status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin-bottom:16px}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--low);flex-shrink:0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 16px}
+.kpi{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--acc,var(--info))}
+.kpi .n{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin-top:2px}
+.kpi .f{font-size:12px;color:var(--mut2);margin-top:8px}
+.kpi .s{font-size:12px;color:var(--mut);margin-top:2px}
+.hist{font-size:12px;color:var(--mut);margin:6px 0}
+.card{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:16px 18px;margin:14px 0}
+.card h3{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--txt)}
+.card p{margin:4px 0;color:var(--mut);font-size:13px}
+.scanrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.scanline{font-size:12px;color:var(--mut);margin:8px 0 0}
+.search{display:flex;gap:8px;margin:12px 0;align-items:center}
+.search input{flex:1;background:var(--input-bg);border:1px solid var(--line);color:var(--txt);padding:9px 12px;border-radius:8px;font:inherit;font-size:13px}
+.search a{font-size:13px}
 .panel{display:none}
 .panel.active{display:block}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
-th{color:var(--mut);font-weight:600}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700}
-.pill-real{background:#12351f;color:#34d399}
-.pill-sim{background:#3a2b00;color:#f59e0b}
-.pill-custom{background:#2b1a4a;color:#c4b5fd}
-.empty{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mut);font-size:13px}
-.empty b{color:var(--txt)}
-.info{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:16px 20px;font-size:12px;text-align:left}
-.info h3{margin:0 0 10px;font-size:13px;color:var(--txt);text-align:center}
-.info .row{display:flex;gap:10px;margin:5px 0}
-.info .k{color:var(--mut);min-width:150px;flex-shrink:0}
-.note{font-size:11px;color:var(--mut);margin-top:10px}
-.explain{font-size:11px;color:var(--mut)}
-.explain b{color:var(--txt)}
-details{font-size:11px;color:var(--mut)}
-summary{cursor:pointer;color:var(--cyan)}
-@media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}.info .k{min-width:110px}}
+.section-title{font-size:15px;font-weight:700;margin:20px 0 10px}
+.tablewrap{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:11px 12px;text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:var(--th-bg);border-bottom:1px solid var(--line-soft)}
+td{border-bottom:1px solid var(--line-soft)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--row-hover)}
+.mono{font-family:ui-monospace,'JetBrains Mono',Menlo,monospace;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.pill-real{background:rgba(0,215,150,.12);color:var(--low)}
+.pill-sim{background:rgba(255,155,16,.12);color:var(--high)}
+.pill-custom{background:rgba(128,202,255,.12);color:var(--info)}
+.pill-crit{background:rgba(245,56,33,.12);color:var(--crit)}
+.pill-high{background:rgba(255,155,16,.12);color:var(--high)}
+.pill-med{background:rgba(255,206,32,.12);color:var(--med)}
+.pill-low{background:rgba(0,215,150,.12);color:var(--low)}
+.pill-info{background:rgba(128,202,255,.12);color:var(--info)}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--mut);font-size:13px}
+.info{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:20px 22px;font-size:13px;text-align:left}
+.info h3{margin:0 0 12px;font-size:14px;color:var(--txt);text-align:left}
+.info .row{display:flex;gap:12px;margin:0;padding:7px 0;border-bottom:1px solid var(--line-soft)}
+.info .row:last-child{border-bottom:0}
+.info .k{color:var(--mut);min-width:160px;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.note{font-size:12px;color:var(--mut2);margin-top:10px}
+.explain{font-size:12px;color:var(--mut);line-height:1.55}
+.explain b{color:var(--txt);font-weight:600}
+details{font-size:12px;color:var(--mut)}
+summary{cursor:pointer;color:var(--blue)}
+@media(max-width:760px){.app{flex-direction:column}.sidebar{width:100%;height:auto;position:static;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{border:0;padding:0 10px 0 0;margin:0}.nav-label{display:none}.tab{width:auto}.sidebar-foot{display:none}.main{padding:16px}.kpis{grid-template-columns:repeat(2,1fr)}.info .k{min-width:110px}}
 """
+
+
+def _svg(inner: str, size: int = 16) -> str:
+    """Inline Lucide icon (ISC, 24px grid, stroke 2, currentColor)."""
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+        f'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        f'stroke-linecap="round" stroke-linejoin="round">{inner}</svg>'
+    )
+
+
+_SVG_SHIELD = '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'
+_SVG_ACTIVITY = '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
+_SVG_SEARCH = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+_SVG_PLAY = '<polygon points="6 3 20 12 6 21 6 3"/>'
+_SVG_VOLUME = '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>'
+_SVG_REFRESH = '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'
+_SVG_SCAN = '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>'
+_SVG_TRASH = '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>'
+_SVG_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'
+_SVG_MOON = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'
+
+
+def _sev_pill_class(sev: str) -> str:
+    """Findings severity -> pill class (CISO severity scale)."""
+    return {"critical": "pill-crit", "warning": "pill-high", "info": "pill-info"}.get(sev, "pill-info")
+
+
+def _intel_level_pill(level: str) -> str:
+    """Intel level string -> pill class (CISO severity scale)."""
+    lv = (level or "").upper()
+    if "CRITICAL" in lv or "ACTIVELY EXPLOITED" in lv:
+        return "pill-crit"
+    if "HIGH" in lv:
+        return "pill-high"
+    if "MEDIUM" in lv or "MODERATE" in lv:
+        return "pill-med"
+    if "LOW" in lv:
+        return "pill-low"
+    return "pill-info"
 
 
 def build_analytical_hud_html(core, lang="en", query=None) -> str:
@@ -339,6 +430,7 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
     for f in reversed(findings):
         sev = str(f.get("severity", "info"))
         sev_label = t(lang, "sev_" + sev) if "sev_" + sev in LANGS.get(lang, {}) else sev
+        sev_pill = _sev_pill_class(sev)
         fdetail = str(f.get("detail", ""))
         ffile = str(f.get("file", ""))
         fline = f.get("line")
@@ -348,7 +440,7 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
         find_rows += (
             f'<tr><td>{html.escape(str(f.get("timestamp", "")))}</td>'
             f"<td>{html.escape(str(f.get('check', '')))}</td>"
-            f"<td>{html.escape(sev_label)}</td>"
+            f'<td><span class="pill {sev_pill}">{html.escape(sev_label)}</span></td>' 
             f"<td>{html.escape(fdetail)}</td>"
             f"<td>{file_cell}</td></tr>"
         )
@@ -364,7 +456,7 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
         intel_rows += (
             f"<tr><td>{html.escape(str(item.get('id', '')))}</td>"
             f"<td>{html.escape(str(product))}</td>"
-            f"<td>{html.escape(str(item.get('level', '')))}</td>"
+            f'<td><span class="pill {_intel_level_pill(str(item.get("level", "")))}">{html.escape(str(item.get("level", "")))}</span></td>' 
             f"<td>{html.escape(str(item.get('date', '')))}</td>"
             f"<td>{html.escape(str(item.get('description', ''))[:200])}</td></tr>"
         )
@@ -416,6 +508,8 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
             "alert_scan_fail": t(lang, "alert_scan_fail"),
             "scan_done": t(lang, "scan_done"),
             "scan_done_clean": t(lang, "scan_done_clean"),
+            "theme_dark": t(lang, "theme_dark"),
+            "theme_light": t(lang, "theme_light"),
         }
     )
 
@@ -426,80 +520,102 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
 <html lang="{lang}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MANAS AEGIS — {html.escape(t(lang, "title_sub"))}</title>
+<script>try{{var _th=localStorage.getItem('manas-aegis-theme');if(_th==='light'||_th==='dark'){{document.documentElement.setAttribute('data-theme',_th);}}}}catch(e){{}}</script>
 <style>{_HUD_CSS}</style></head>
 <body>
-<div class="top">
+<div class="app">
+<aside class="sidebar">
+<div class="brand">
+<span class="brand-mark">{_svg(_SVG_SHIELD, 20)}</span>
+<div><div class="brand-name">MANAS AEGIS</div><div class="brand-sub">{html.escape(t(lang, "title_sub"))}</div></div>
+</div>
+<div class="nav-label">{html.escape(t(lang, "nav_monitor"))}</div>
+<button class="tab active" onclick="showTab('act',this)">{_svg(_SVG_ACTIVITY)}<span>{t(lang, "tab_activity")}</span></button>
+<button class="tab" onclick="showTab('intel',this)">{_svg(_SVG_SHIELD)}<span>{t(lang, "tab_intel")}</span></button>
+<button class="tab" onclick="showTab('find',this)">{_svg(_SVG_SEARCH)}<span>{t(lang, "tab_findings")}</span></button>
+<div class="sidebar-foot">
+<div>{html.escape(str(posture["codename"]))}</div>
+<div>{html.escape(status_line)}</div>
+</div>
+</aside>
+<main class="main">
+<div class="topbar">
 <div>
-<div class="badge">◆ MANAS AEGIS</div>
 <h1>MANAS AEGIS</h1>
 <div class="sub">{t(lang, "title_sub")}</div>
 <div class="sub2">{t(lang, "title_sub2")}</div>
 </div>
-<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-<label style="font-size:12px;color:var(--mut)">{t(lang, "lang_label")}</label>
+<div class="actions">
+<label>{t(lang, "lang_label")}</label>
 <select id="langSel" onchange="setLang(this.value)">{lang_options}</select>
-<button class="btn" onclick="toggleSound()">🔊 {t(lang, "sound")}</button>
-<button class="btn" onclick="triggerBarrage()">▶ {t(lang, "run_sim")}</button>
+<button class="btn" id="themeBtn" onclick="toggleTheme()">{_svg(_SVG_SUN)}<span>{t(lang, "theme_light")}</span></button>
+<button class="btn" onclick="toggleSound()">{_svg(_SVG_VOLUME)}<span>{t(lang, "sound")}</span></button>
+<button class="btn btn-primary" onclick="triggerBarrage()">{_svg(_SVG_PLAY)}<span>{t(lang, "run_sim")}</span></button>
 </div>
 </div>
-<div class="status">{html.escape(status_line)}</div>
+<div class="status"><span class="dot"></span><span>{html.escape(status_line)}</span></div>
 <div class="kpis">
-<div class="kpi"><div class="n">{st["hard_blocked"]}</div><div class="l">{t(lang, "kpi_blocked")}</div><div class="f">{t(lang, "kpi_blocked_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_block)}</div></div>
-<div class="kpi"><div class="n">{st["virtual_patched"]}</div><div class="l">{t(lang, "kpi_modified")}</div><div class="f">{t(lang, "kpi_modified_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_modify)}</div></div>
-<div class="kpi"><div class="n">{st["honeypot_deceived"]}</div><div class="l">{t(lang, "kpi_honeypot")}</div><div class="f">{t(lang, "kpi_honeypot_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_deceive)}</div></div>
-<div class="kpi"><div class="n">{posture["rules_defined"]}</div><div class="l">{t(lang, "kpi_rules")}</div><div class="f">{t(lang, "kpi_events", n=total)}</div><div class="s">{t(lang, "kpi_rules_sub", exp=str(len(experimental)), custom=str(len(custom)), planned=str(len(planned)))}</div></div>
+<div class="kpi" style="--acc:var(--crit)"><div class="n">{st["hard_blocked"]}</div><div class="l">{t(lang, "kpi_blocked")}</div><div class="f">{t(lang, "kpi_blocked_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_block)}</div></div>
+<div class="kpi" style="--acc:var(--high)"><div class="n">{st["virtual_patched"]}</div><div class="l">{t(lang, "kpi_modified")}</div><div class="f">{t(lang, "kpi_modified_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_modify)}</div></div>
+<div class="kpi" style="--acc:var(--med)"><div class="n">{st["honeypot_deceived"]}</div><div class="l">{t(lang, "kpi_honeypot")}</div><div class="f">{t(lang, "kpi_honeypot_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_deceive)}</div></div>
+<div class="kpi" style="--acc:var(--info)"><div class="n">{posture["rules_defined"]}</div><div class="l">{t(lang, "kpi_rules")}</div><div class="f">{t(lang, "kpi_events", n=total)}</div><div class="s">{t(lang, "kpi_rules_sub", exp=str(len(experimental)), custom=str(len(custom)), planned=str(len(planned)))}</div></div>
 </div>
 <div class="hist">{html.escape(range_label)}</div>
 <div class="hist">{html.escape(t(lang, "history_line", real=str(hist["real"]), sim=str(hist["sim"])))}</div>
 <div class="hist">{html.escape(sim_line)}</div>
-<div class="scope">
+<div class="card">
 <h3>{t(lang, "scope_monitored")}</h3>
 <p>{t(lang, "scope_monitored_text", n=str(len(experimental)))}</p>
 {"<p>" + html.escape(custom_line) + "</p>" if custom_line else ""}
 <h3>{t(lang, "scope_not")}</h3>
 <p>{t(lang, "scope_not_text")}</p>
 </div>
+<div class="card">
+<h3>{t(lang, "scan_title")}</h3>
 <div class="scanrow">
-<button class="btn" onclick="runScan('quick')">🔍 {t(lang, "scan_quick")}</button>
-<button class="btn" onclick="runScan('full')">🔍 {t(lang, "scan_full")}</button>
-<button class="btn" onclick="runScan('network')">🔍 {t(lang, "scan_network")}</button>
+<button class="btn" onclick="runScan('quick')">{_svg(_SVG_SCAN)}<span>{t(lang, "scan_quick")}</span></button>
+<button class="btn" onclick="runScan('full')">{_svg(_SVG_SCAN)}<span>{t(lang, "scan_full")}</span></button>
+<button class="btn" onclick="runScan('network')">{_svg(_SVG_SCAN)}<span>{t(lang, "scan_network")}</span></button>
 </div>
 <div class="scanline">{html.escape(scan_line)}</div>
-<div class="tabs">
-<button class="tab active" onclick="showTab('act',this)">{t(lang, "tab_activity")}</button>
-<button class="tab" onclick="showTab('intel',this)">{t(lang, "tab_intel")}</button>
-<button class="tab" onclick="showTab('find',this)">{t(lang, "tab_findings")}</button>
 </div>
 <div class="panel active" id="tab-act">
 <form class="search" method="get" action="">
 <input type="hidden" name="lang" value="{lang}">
 <input name="q" value="{q_esc}" placeholder="{html.escape(t(lang, 'search_placeholder'))}">
-<button class="btn" type="submit">{t(lang, "search_button")}</button>
+<button class="btn" type="submit">{_svg(_SVG_SEARCH)}<span>{t(lang, "search_button")}</span></button>
 {f'<a href="{clear_q}">{t(lang, "search_clear")}</a>' if query else ""}
 </form>
 {f'<div class="hist">{html.escape(search_note)}</div>' if search_note else ""}
 {empty_html if empty_html else ""}
-{f'<table><tr><th>{t(lang, "col_time")}</th><th>{t(lang, "table_source")}</th><th>{t(lang, "col_rule")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "col_detail")}</th></tr>{rows}</table>' if rows else ("" if empty_html else f'<div class="empty">{t(lang, "no_activity")}</div>')}
-<div style="margin-top:10px"><button class="btn" onclick="clearHistory()">{t(lang, "clear_history")}</button></div>
+{f'<div class="tablewrap"><table><tr><th>{t(lang, "col_time")}</th><th>{t(lang, "table_source")}</th><th>{t(lang, "col_rule")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "col_detail")}</th></tr>{rows}</table></div>' if rows else ("" if empty_html else f'<div class="empty">{t(lang, "no_activity")}</div>')}
+<div style="margin-top:12px"><button class="btn" onclick="clearHistory()">{_svg(_SVG_TRASH)}<span>{t(lang, "clear_history")}</span></button></div>
 </div>
 <div class="panel" id="tab-intel">
-<h3 style="font-size:13px">{t(lang, "intel_global_title")}</h3>
+<h3 class="section-title">{t(lang, "intel_global_title")}</h3>
 <div class="note">{t(lang, "intel_global_note", sources=sources)}</div>
 {f'<div class="note">{html.escape(intel_status)}</div>' if intel_status else ""}
-<div style="margin:8px 0"><button class="btn" onclick="refreshIntel()">{t(lang, "intel_refresh")}</button></div>
-{f'<table><tr><th>{t(lang, "intel_col_id")}</th><th>{t(lang, "intel_col_product")}</th><th>{t(lang, "intel_col_level")}</th><th>{t(lang, "intel_col_date")}</th><th>{t(lang, "intel_explain")}</th></tr>{intel_rows}</table>' if intel_rows else f'<div class="empty">{t(lang, "intel_none")}</div>'}
-<h3 style="font-size:13px;margin-top:18px">{t(lang, "tab_intel")}</h3>
-<table><tr><th>{t(lang, "col_rule")}</th><th>{t(lang, "intel_advisory")}</th><th>{t(lang, "intel_status")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "intel_explain")}</th><th>{t(lang, "intel_note_col")}</th></tr>{cat_rows}</table>
+<div style="margin:10px 0"><button class="btn" onclick="refreshIntel()">{_svg(_SVG_REFRESH)}<span>{t(lang, "intel_refresh")}</span></button></div>
+{f'<div class="tablewrap"><table><tr><th>{t(lang, "intel_col_id")}</th><th>{t(lang, "intel_col_product")}</th><th>{t(lang, "intel_col_level")}</th><th>{t(lang, "intel_col_date")}</th><th>{t(lang, "intel_explain")}</th></tr>{intel_rows}</table></div>' if intel_rows else f'<div class="empty">{t(lang, "intel_none")}</div>'}
+<h3 class="section-title">{t(lang, "tab_intel")}</h3>
+<div class="tablewrap"><table><tr><th>{t(lang, "col_rule")}</th><th>{t(lang, "intel_advisory")}</th><th>{t(lang, "intel_status")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "intel_explain")}</th><th>{t(lang, "intel_note_col")}</th></tr>{cat_rows}</table></div>
 <div class="note">{t(lang, "intel_note")}</div>
 </div>
 <div class="panel" id="tab-find">
-{f'<table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>File</th></tr>{find_rows}</table>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
+{f'<div class="tablewrap"><table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>File</th></tr>{find_rows}</table></div>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
+</div>
+</main>
 </div>
 <script>
 const I18N = {i18n_js};
+const ICON_SUN = `{_svg(_SVG_SUN, 14)}`;
+const ICON_MOON = `{_svg(_SVG_MOON, 14)}`;
 let soundOn = localStorage.getItem('manas-aegis-sound') === '1';
 function setLang(v){{localStorage.setItem('manas-aegis-lang', v); const u = new URL(location.href); u.searchParams.set('lang', v); location.href = u.toString();}}
 (function(){{const s = localStorage.getItem('manas-aegis-lang'); const u = new URL(location.href); if(!u.searchParams.get('lang') && s && s !== document.documentElement.lang){{u.searchParams.set('lang', s); location.replace(u.toString());}}}})();
+function applyTheme(theme){{document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('manas-aegis-theme', theme); const b = document.getElementById('themeBtn'); if(b){{ b.innerHTML = (theme === 'light' ? ICON_MOON + '<span>' + I18N.theme_dark + '</span>' : ICON_SUN + '<span>' + I18N.theme_light + '</span>'); }}}}
+function toggleTheme(){{const cur = document.documentElement.getAttribute('data-theme') || 'dark'; applyTheme(cur === 'dark' ? 'light' : 'dark');}}
+(function(){{const saved = localStorage.getItem('manas-aegis-theme'); applyTheme(saved === 'light' ? 'light' : 'dark');}})();
 function showTab(id, el){{document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.getElementById('tab-' + id).classList.add('active'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); el.classList.add('active');}}
 function toggleSound(){{soundOn = !soundOn; localStorage.setItem('manas-aegis-sound', soundOn ? '1' : '0');}}
 async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
