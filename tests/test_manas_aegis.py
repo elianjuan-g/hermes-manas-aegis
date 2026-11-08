@@ -637,6 +637,33 @@ class TestManasAegisR251(unittest.TestCase):
         subs = re.findall(r"simulation: (\d+)", h)
         self.assertEqual([int(x) for x in subs], [8, 2, 2])
 
+
+    def test_reload_state_picks_up_other_process_writes(self):
+        # A second process (a live Hermes agent, another session)
+        # writes events to the telemetry file. The core must see them
+        # after reload_state() without a restart.
+        from hermes_manas_aegis.core_engine import THREAT_MATRIX
+
+        spec = THREAT_MATRIX["MANAS-SHELL-RCE"]
+        self.core._log_stix_event(
+            spec, "s", "tool", "ev", 1.35, 50, "A", "HARD_BLOCK", source="runtime"
+        )
+        # Simulate a second process: a fresh core instance writes one
+        # more real event to the same state dir.
+        from hermes_manas_aegis.core_engine import ManasAegisCore
+
+        other = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+        other._log_stix_event(
+            spec, "s2", "tool2", "ev2", 1.35, 50, "A", "HARD_BLOCK", source="runtime"
+        )
+        # The first core still has the old in-memory list.
+        self.assertEqual(len(self.core.events), 1)
+        self.core.reload_state()
+        self.assertEqual(len(self.core.events), 2)
+        self.assertEqual(
+            [e.get("tool_name") for e in self.core.events], ["tool", "tool2"]
+        )
+
     def test_active_tab_param(self):
         h = build_analytical_hud_html(self.core, lang="en", active_tab="find")
         self.assertIn('<div class="panel active" id="tab-find">', h)

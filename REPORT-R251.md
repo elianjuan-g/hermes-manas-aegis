@@ -72,13 +72,26 @@ pindai sukses, halaman otomatis pindah ke tab Findings
 (`?tab=find` di URL; server me-render tab yang diminta). Pencarian
 tetap di tab Activity.
 
+### 4. Integrasi antar-proses — HUD tidak melihat event proses lain
+
+Saat membuktikan jalur real, ketemu satu celah integrasi yang
+nyata: server HUD memuat event ke memori saat startup saja. Uji
+intercept real menulis 3 event real ke berkas telemetri, tapi
+HUD yang sedang jalan tetap menampilkan 12 event (tidak melihat
+3 event baru) sampai server di-restart. Perbaikan:
+`core.reload_state()` dipanggil di setiap GET — halaman selalu
+mencerminkan isi disk, jadi event dari agen Hermes yang sedang
+jalan (proses lain) muncul tanpa restart.
+
 ## Verifikasi
 
-- **Unit test: 32/32 lulus** (28 lama + 4 baru R2.5.1, termasuk
-  reproduksi telemetri MyLord: 12 event → sub-jumlah 8/2/2).
-- **E2E: 19/19 lulus** (HTTP nyata: sub-jumlah sim non-nol dan
+- **Unit test: 33/33 lulus** (28 lama + 5 baru R2.5.1, termasuk
+  reproduksi telemetri MyLord: 12 event → sub-jumlah 8/2/2, dan
+  reload_state antar-proses).
+- **E2E: 21/21 lulus** (HTTP nyata: sub-jumlah sim non-nol dan
   berjumlah 6, `?tab=find` me-render Findings aktif, pindai →
-  Findings, intercept real → counter real > 0).
+  Findings, intercept real → counter real > 0, proses kedua
+  menulis event → HUD menampilkannya tanpa restart).
 - **Live di PC:** diverifikasi sesudah install (lihat laporan
   kirim ke MyLord).
 
@@ -100,7 +113,9 @@ tetap di tab Activity.
 
 - Bug sub-jumlah simulasi diperbaiki dan dibuktikan dengan
   telemetri asli MyLord (8/2/2).
-- Jalur data real dibuktikan lewat uji integrasi langsung di PC.
+- Jalur data real dibuktikan lewat uji integrasi langsung di PC,
+  plus celah integrasi antar-proses (HUD tidak melihat event
+  proses lain) ditutup dengan reload_state di setiap GET.
 - UX pindai diperbaiki (otomatis ke Findings).
 - Notes: (1) data real selanjutnya tergantung pemakaian Hermes;
   (2) perbaikan bahasa (v2.5.2) masih antre; (3) bypass Fase R2

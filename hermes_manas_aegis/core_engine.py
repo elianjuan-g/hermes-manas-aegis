@@ -315,6 +315,22 @@ class ManasAegisCore:
     def _archive_path(self) -> Path:
         return self.state_dir / self.TELEMETRY_ARCHIVE_NAME
 
+    def reload_state(self) -> None:
+        """Re-read on-disk state (telemetry, scan state, threat intel).
+
+        The HUD server is a long-lived process, but events and findings
+        are also written by OTHER processes (a live Hermes agent
+        intercepting real tool calls, a scan run from another
+        session). Without a reload, the HUD keeps showing the state
+        from its own startup and real activity never appears until a
+        server restart (found 2026-11-09: a real-intercept test wrote
+        3 real events, the running HUD still showed 12). The handler
+        calls this before every GET so the page always reflects disk.
+        """
+        self._load_events()
+        self._load_scan_state()
+        self.threat_intel = _threat_intel.load_threat_intel(self.state_dir)
+
     def _load_events(self) -> None:
         self._archived_count = 0
         self._archived_runtime = 0

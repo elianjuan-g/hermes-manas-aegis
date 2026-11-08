@@ -42,11 +42,21 @@ ke browse/library"). Dua bug + satu integrasi yang belum terbukti.
   dan menaikkan kartu KPI. Data real selanjutnya muncul otomatis
   setiap agen Hermes memanggil tool — plugin tidak bisa
   "mendeteksi" tool yang tidak pernah dipanggil.
-- **Unit test: 32/28 lulus** — 28 lama + 4 baru R2.5.1 (sub-jumlah
+- **Integrasi antar-proses (reload_state).** Server HUD adalah
+  proses berumur panjang, tapi event juga ditulis proses lain
+  (agen Hermes yang mencegat tool real, pindai dari sesi lain).
+  Sebelumnya HUD hanya memuat state saat startup — event real
+  dari proses lain tidak muncul sampai server di-restart (terbukti
+  saat uji intercept real: 3 event real tertulis ke file, HUD
+  tetap menampilkan 12). Kini `core.reload_state()` dipanggil di
+  setiap GET, jadi halaman selalu mencerminkan isi disk.
+- **Unit test: 33/28 lulus** — 28 lama + 5 baru R2.5.1 (sub-jumlah
   sim dengan string verdict asli incl. reproduksi telemetri MyLord
-  12 event → 8/2/2, param tab, redirect pindai). **E2E: 19/19
-  lulus** (HTTP nyata: sub-jumlah sim non-nol + jumlah 6, tab=find,
-  pindai → Findings, intercept real → counter real > 0).
+  12 event → 8/2/2, param tab, redirect pindai, reload_state
+  antar-proses). **E2E: 21/21 lulus** (HTTP nyata: sub-jumlah sim
+  non-nol + jumlah 6, tab=find, pindai → Findings, intercept real
+  → counter real > 0, proses kedua menulis event → HUD menampilkannya
+  tanpa restart).
 
 ## [2.5.0-alpha] — 2026-11-09
 

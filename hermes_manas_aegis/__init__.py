@@ -654,6 +654,10 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         core = get_core()
+        # Re-read on-disk state so events/findings written by other
+        # processes (a live Hermes agent, another session's scan) show
+        # up without a server restart.
+        core.reload_state()
         parsed = urlparse(self.path)
         if parsed.path == "/api/search":
             qs = parse_qs(parsed.query)
