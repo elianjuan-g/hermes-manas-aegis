@@ -7,11 +7,14 @@ from __future__ import annotations
 import html
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import parse_qs, urlparse
 
 from .core_engine import ManasAegisCore, THREAT_MATRIX
+from .i18n import DEFAULT_LANG, LANGS, SUPPORTED_LANGS, explain, t
 
 
 _CORE: Optional[ManasAegisCore] = None
@@ -27,426 +30,490 @@ def get_core(config: Optional[Dict[str, Any]] = None) -> ManasAegisCore:
     return _CORE
 
 
-def _action_label(verdict: str) -> str:
+def _action_label(verdict: str, lang: str = "en") -> str:
     if "HARD_BLOCK" in verdict:
-        return "Diblokir"
+        return t(lang, "action_blocked")
     if "SYNTHESIZED" in verdict:
-        return "Argumen diubah"
+        return t(lang, "action_modified")
     if "HONEYPOT" in verdict:
-        return "Konten disamarkan"
-    return verdict or "Dicatat"
+        return t(lang, "action_deceived")
+    return t(lang, "action_logged")
 
 
-def _strategy_label(strategy: str) -> str:
+def _strategy_label(strategy: str, lang: str = "en") -> str:
     return {
-        "HARD_BLOCK": "Diblokir",
-        "SYNTHESIZE_PATCH": "Argumen diubah",
-        "HONEYPOT_DECEIVE": "Konten disamarkan",
+        "HARD_BLOCK": t(lang, "action_blocked"),
+        "SYNTHESIZE_PATCH": t(lang, "action_modified"),
+        "HONEYPOT_DECEIVE": t(lang, "action_deceived"),
     }.get(strategy, strategy)
 
 
-def _plain_reason(ev: Dict[str, Any]) -> str:
+def _plain_reason(ev: Dict[str, Any], lang: str = "en") -> str:
     verdict = str(ev.get("verdict", ""))
     rule = str(ev.get("codename", "aturan ini"))
+    if lang == "id":
+        if "HARD_BLOCK" in verdict:
+            return (
+                f"Aktivitas ini diblokir karena cocok dengan pola {rule}. "
+                "Pemblokiran didasarkan pada kecocokan pola, bukan bukti bahwa "
+                "ada penyerang atau kompromi nyata."
+            )
+        if "SYNTHESIZED" in verdict:
+            return (
+                f"Argumen aktivitas ini diubah agar lebih aman sesuai {rule}. "
+                "Ini mengubah argumen yang diteruskan, bukan memasang patch "
+                "perangkat lunak."
+            )
+        if "HONEYPOT" in verdict:
+            return (
+                f"Aktivitas ini dialihkan ke data umpan (honeypot) sesuai {rule}, "
+                "sehingga target aslinya tidak dibaca."
+            )
+        return f"Aktivitas ini dicatat oleh {rule}."
     if "HARD_BLOCK" in verdict:
         return (
-            f"Aktivitas ini diblokir karena cocok dengan pola {rule}. "
-            "Pemblokiran didasarkan pada kecocokan pola, bukan bukti bahwa "
-            "ada penyerang atau kompromi nyata."
+            f"This activity was blocked because it matched the {rule} pattern. "
+            "Blocking is based on a pattern match, not proof of a real "
+            "attacker or compromise."
         )
     if "SYNTHESIZED" in verdict:
         return (
-            f"Argumen aktivitas ini diubah agar lebih aman sesuai {rule}. "
-            "Ini mengubah argumen yang diteruskan, bukan memasang patch "
-            "perangkat lunak."
+            f"The arguments of this activity were changed to be safer, "
+            f"following {rule}. This changes the arguments passed on; it "
+            "does not install a software patch."
         )
     if "HONEYPOT" in verdict:
         return (
-            f"Aktivitas ini dialihkan ke data umpan (honeypot) sesuai {rule}, "
-            "sehingga target aslinya tidak dibaca."
+            f"This activity was redirected to honeypot (decoy) data following "
+            f"{rule}, so the real target was not read."
         )
-    return f"Aktivitas ini dicatat oleh {rule}."
+    return f"This activity was recorded by {rule}."
 
 
-def build_analytical_hud_html(core: ManasAegisCore) -> str:
-    posture = core.get_system_posture()
-    stats = posture["stats"]
-    runtime_total = stats["total_intercepted"]
-    sim_total = stats["simulation_events"]
-    total_stored = stats["total_stored"]
-    events = list(reversed(core.events[-15:]))
-
-    # --- Activity rows (Waktu / Sumber / Aturan / Tindakan / Detail) ---
-    rows = ""
-    for ev in events:
-        verdict = str(ev.get("verdict", ""))
-        source = str(ev.get("source", "runtime"))
-        if source == "simulation":
-            source_badge = '<span class="pill pill-sim">SIMULASI</span>'
-        else:
-            source_badge = '<span class="pill pill-real">Nyata</span>'
-        ts_esc = html.escape(str(ev.get("timestamp", "")))
-        adv_esc = html.escape(str(ev.get("cve_id", "")))
-        rule_esc = html.escape(str(ev.get("codename", "")))
-        action_esc = html.escape(_action_label(verdict))
-        reason_esc = html.escape(_plain_reason(ev))
-        cwe_esc = html.escape(str(ev.get("cwe_id", "")))
-        score_esc = html.escape(str(ev.get("composite_score", "")))
-        cvss_esc = html.escape(str(ev.get("cvss_base", "")))
-        epss_esc = html.escape(str(round(float(ev.get("epss_prob", 0.0)) * 100, 1)))
-        cwss_esc = html.escape(str(ev.get("cwss_score", "")))
-        ssvc_esc = html.escape(str(ev.get("ssvc_decision", "TRACK")))
-        tool_esc = html.escape(str(ev.get("tool_name", "")))
-        evidence_esc = html.escape(str(ev.get("evidence", ""))[:95])
-        rows += f"""
-        <tr class="event-row">
-          <td><code>{ts_esc}</code></td>
-          <td>{source_badge}</td>
-          <td><b style="color:#fff;">{adv_esc}</b><br><small>{rule_esc}</small></td>
-          <td>{action_esc}</td>
-          <td>
-            <details>
-              <summary>Lihat detail</summary>
-              <p>{reason_esc}</p>
-              <p class="tech">ID advisori internal: {adv_esc}<br>
-              CWE: {cwe_esc}<br>
-              Tool: <code>{tool_esc}</code><br>
-              Evidence (teredaksi): <code>{evidence_esc}</code><br>
-              Skor komposit {score_esc}/100 (CVSS {cvss_esc} | EPSS {epss_esc}% | CWSS {cwss_esc}) &mdash; nilai referensi aturan<br>
-              SSVC: {ssvc_esc} &mdash; nilai referensi aturan, bukan keputusan penegakan</p>
-            </details>
-          </td>
-        </tr>
-        """
-
-    if not rows:
-        rows = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#6c93b8;">Belum ada aktivitas tercatat.</td></tr>'
-
-    # --- Rule catalogue rows (tab "Intelijen ancaman") ---
-    catalog_rows = ""
-    for spec in THREAT_MATRIX.values():
-        status = str(getattr(spec, "status", "experimental"))
-        if status == "planned":
-            status_cell = "planned &mdash; direncanakan, belum diterapkan"
-            action_cell = "&mdash; (belum diterapkan)"
-        else:
-            status_cell = "experimental &mdash; diperiksa oleh engine"
-            action_cell = html.escape(_strategy_label(spec.strategy))
-        catalog_rows += f"""
-        <tr>
-          <td><b style="color:#fff;">{html.escape(spec.codename)}</b><br><small>{html.escape(spec.rule_id)}</small></td>
-          <td>{html.escape(spec.advisory_id)}</td>
-          <td>{status_cell}</td>
-          <td>{action_cell}</td>
-          <td>{html.escape(spec.cwe_id)}<br><small>CVSS {html.escape(str(spec.cvss_base))} | EPSS {html.escape(str(round(spec.epss_prob * 100, 1)))}% | CWSS {html.escape(str(spec.cwss_score))} &mdash; nilai referensi aturan</small></td>
-        </tr>
-        """
-
-    # --- Connection status (honest: only "connected" when hooks verified) ---
-    if getattr(core, "hooks_verified", False):
-        status_html = '<span class="dot-ok">&#9679;</span> Terhubung ke sesi Hermes'
+def _custom_explain(entry: Dict[str, Any], lang: str = "en") -> Dict[str, str]:
+    """Generated explanation for a user-defined rule (no curated text)."""
+    spec = entry["spec"]
+    pattern = entry["pattern"]
+    tools = entry.get("tools") or []
+    if lang == "id":
+        lay = (
+            f"Aturan khusus “{spec.codename}” — memblokir aktivitas "
+            "yang cocok dengan polanya."
+        )
+        pro = (
+            f"Pola: /{pattern.pattern}/ · Tool: "
+            f"{', '.join(tools) or 'semua'} · {spec.cwe_id}"
+        )
     else:
-        status_html = "Status koneksi belum dapat diverifikasi &mdash; perlindungan belum dipastikan aktif."
-    if _SERVER_OK is False:
-        status_html += " Server HUD tidak dapat dimulai."
+        lay = (
+            f"Custom rule “{spec.codename}” — blocks activity "
+            "matching its pattern."
+        )
+        pro = (
+            f"Pattern: /{pattern.pattern}/ · Tools: "
+            f"{', '.join(tools) or 'all'} · {spec.cwe_id}"
+        )
+    return {"lay": lay, "pro": pro}
 
-    # --- Empty state (no RUNTIME events) ---
-    if runtime_total == 0:
-        empty_html = """
-    <div class="empty-state">
-      <b>Belum ada aktivitas yang cocok dengan aturan perlindungan.</b>
-      <p>Ini bukan pemindaian seluruh komputer atau daftar kerentanan perangkat.</p>
-    </div>
+
+_HUD_CSS = """
+:root{--bg:#040811;--card:#0a1226;--line:#1b2a4a;--txt:#e8eefc;--mut:#8fa3c8;
+--cyan:#00f5d4;--gold:#f59e0b;--crimson:#ff2a5f;--green:#34d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:'JetBrains Mono',ui-monospace,monospace;padding:18px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.badge{font-size:28px;color:var(--cyan)}
+h1{margin:0;font-size:22px;letter-spacing:.08em}
+.sub{color:var(--mut);font-size:12px;margin-top:4px}
+.sub2{color:var(--mut);font-size:11px;margin-top:2px}
+.btn{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:12px}
+.btn:hover{border-color:var(--cyan)}
+select{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:inherit;font-size:12px}
+.status{margin:16px 0 8px;font-size:12px;color:var(--mut)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.kpi .n{font-size:26px;font-weight:700}
+.kpi .l{font-size:11px;color:var(--mut);margin-top:4px}
+.kpi .f{font-size:10px;color:var(--mut);margin-top:6px}
+.kpi .s{font-size:10px;color:var(--mut);margin-top:4px}
+.hist{font-size:11px;color:var(--mut);margin:8px 0}
+.scope{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0;font-size:12px}
+.scope h3{margin:0 0 6px;font-size:12px;color:var(--cyan)}
+.scope p{margin:4px 0;color:var(--mut)}
+.scanrow{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center}
+.scanline{font-size:11px;color:var(--mut);margin:6px 0}
+.search{display:flex;gap:8px;margin:10px 0;align-items:center}
+.search input{flex:1;background:#12203d;border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:inherit;font-size:12px}
+.search a{color:var(--cyan);font-size:12px}
+.tabs{display:flex;gap:8px;margin:14px 0 8px}
+.tab{background:#12203d;border:1px solid var(--line);color:var(--txt);padding:7px 14px;border-radius:8px 8px 0 0;cursor:pointer;font:inherit;font-size:12px}
+.tab.active{border-color:var(--cyan);color:var(--cyan)}
+.panel{display:none}
+.panel.active{display:block}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700}
+.pill-real{background:#12351f;color:#34d399}
+.pill-sim{background:#3a2b00;color:#f59e0b}
+.pill-custom{background:#2b1a4a;color:#c4b5fd}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mut);font-size:13px}
+.empty b{color:var(--txt)}
+.info{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:16px 20px;font-size:12px;text-align:left}
+.info h3{margin:0 0 10px;font-size:13px;color:var(--txt);text-align:center}
+.info .row{display:flex;gap:10px;margin:5px 0}
+.info .k{color:var(--mut);min-width:150px;flex-shrink:0}
+.note{font-size:11px;color:var(--mut);margin-top:10px}
+.explain{font-size:11px;color:var(--mut)}
+.explain b{color:var(--txt)}
+details{font-size:11px;color:var(--mut)}
+summary{cursor:pointer;color:var(--cyan)}
+@media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}.info .k{min-width:110px}}
 """
+
+
+def build_analytical_hud_html(core, lang="en", query=None) -> str:
+    if lang not in {c for c, _ in SUPPORTED_LANGS}:
+        lang = DEFAULT_LANG
+    posture = core.get_system_posture()
+    st = posture["stats"]
+    total = st["total_stored"]
+    hist = core.get_history_stats()
+    sim = posture.get("last_simulation")
+    scan = posture.get("last_scan")
+    intel = getattr(core, "threat_intel", {}) or {}
+    custom = getattr(core, "custom_rules", [])
+    custom_errors = getattr(core, "custom_rule_errors", [])
+    experimental = [r for r in THREAT_MATRIX.values() if r.status == "experimental"]
+    planned = [r for r in THREAT_MATRIX.values() if r.status == "planned"]
+
+    # Simulation subcounts per KPI card (live events only).
+    sim_block = sum(
+        1 for e in core.events if e.get("source") == "simulation" and e.get("verdict") == "BLOCK"
+    )
+    sim_modify = sum(
+        1
+        for e in core.events
+        if e.get("source") == "simulation" and e.get("verdict") == "SYNTHESIZED"
+    )
+    sim_deceive = sum(
+        1 for e in core.events if e.get("source") == "simulation" and e.get("verdict") == "HONEYPOT"
+    )
+
+    # Status line.
+    if core.hooks_verified:
+        status_line = t(lang, "status_connected")
+    else:
+        status_line = t(lang, "status_unverified")
+    if _SERVER_OK is False:
+        status_line += t(lang, "status_server_fail")
+
+    # Stored-history range label (unlimited: live file + archive).
+    if hist["total"] == 0:
+        range_label = t(lang, "range_empty")
+    else:
+        range_label = t(
+            lang,
+            "range_label",
+            first=hist["first_ts"],
+            last=hist["last_ts"],
+            total=str(hist["total"]),
+        )
+
+    # Persistent last-simulation line (survives reloads; the post-run
+    # message alone used to vanish).
+    if sim:
+        sim_line = t(
+            lang,
+            "sim_last",
+            time=sim["timestamp"],
+            matched=str(sim["matched"]),
+            total=str(sim["total"]),
+            blocked=str(sim["blocked"]),
+            modified=str(sim["modified"]),
+            deceived=str(sim["deceived"]),
+        )
+    else:
+        sim_line = t(lang, "sim_never")
+
+    # Scan status line (last_scan stores counts, not the finding list).
+    if scan:
+        scan_line = t(
+            lang,
+            "scan_last",
+            time=scan["started_at"],
+            scope=scan["scope"],
+            findings=str(scan.get("findings_count", 0)),
+            critical=str(scan.get("critical_count", 0)),
+        )
+    else:
+        scan_line = t(lang, "scan_never")
+
+    # Language selector options.
+    lang_options = "".join(
+        f'<option value="{code}"{" selected" if code == lang else ""}>{html.escape(name)}</option>'
+        for code, name in SUPPORTED_LANGS
+    )
+
+    # Activity rows: search results when a query is given, else latest 15.
+    if query:
+        rows_events = core.search_events(query)
+        if rows_events:
+            search_note = t(lang, "search_results", n=len(rows_events), q=query)
+        else:
+            search_note = t(lang, "search_none", q=query)
+    else:
+        rows_events = core.events[-15:]
+        search_note = ""
+
+    rows = ""
+    for ev in reversed(rows_events):
+        src = ev.get("source", "")
+        if src == "simulation":
+            pill = f'<span class="pill pill-sim">{t(lang, "source_sim")}</span>'
+        else:
+            pill = f'<span class="pill pill-real">{t(lang, "source_real")}</span>'
+        detail = (
+            f'<details><summary>{t(lang, "detail_show")}</summary>'
+            f'<div>{t(lang, "detail_advisory")}: {html.escape(str(ev.get("cve_id", "")))}</div>'
+            f'<div>{t(lang, "detail_evidence")}: {html.escape(str(ev.get("evidence", ""))[:300])}</div>'
+            f'<div>{t(lang, "detail_ref")}: {html.escape(str(ev.get("rule_ref", "")))}</div>'
+            f'<div>{html.escape(_plain_reason(ev, lang))}</div>'
+            f"</details>"
+        )
+        rows += (
+            f'<tr><td>{html.escape(str(ev.get("timestamp", "")))}</td>'
+            f"<td>{pill}</td>"
+            f'<td>{html.escape(str(ev.get("codename", "")))}<br><span style="color:var(--mut)">{html.escape(str(ev.get("cve_id", "")))}</span></td>'
+            f"<td>{html.escape(_action_label(str(ev.get('verdict', '')), lang))}</td>"
+            f"<td>{detail}</td></tr>"
+        )
+
+    # Rule catalog rows (built-in) + custom rules appended.
+    cat_rows = ""
+    for rule_id, spec in THREAT_MATRIX.items():
+        ex = explain(rule_id, lang)
+        if ex["lay"]:
+            expl = (
+                f'<div class="explain"><b>{t(lang, "intel_explain_lay")}:</b> '
+                f"{html.escape(ex['lay'])}<br><b>{t(lang, 'intel_explain_pro')}:</b> "
+                f"{html.escape(ex['pro'])}</div>"
+            )
+        else:
+            expl = f'<div class="explain">{html.escape(t(lang, "intel_note"))}</div>'
+        if spec.status == "planned":
+            status_txt = t(lang, "status_planned")
+            action_txt = t(lang, "action_none")
+        else:
+            status_txt = t(lang, "status_experimental")
+            action_txt = _strategy_label(spec.strategy, lang)
+        cat_rows += (
+            f"<tr><td>{html.escape(spec.codename)}</td>"
+            f"<td>{html.escape(spec.advisory_id)}</td>"
+            f"<td>{html.escape(status_txt)}</td>"
+            f"<td>{html.escape(action_txt)}</td>"
+            f"<td>{expl}</td>"
+            f"<td>{html.escape(t(lang, 'intel_note'))}</td></tr>"
+        )
+    for entry in custom:
+        spec = entry["spec"]
+        ex = _custom_explain(entry, lang)
+        expl = (
+            f'<div class="explain"><b>{t(lang, "intel_explain_lay")}:</b> '
+            f"{html.escape(ex['lay'])}<br><b>{t(lang, 'intel_explain_pro')}:</b> "
+            f"{html.escape(ex['pro'])}</div>"
+        )
+        cat_rows += (
+            f'<tr><td>{html.escape(spec.codename)} '
+            f'<span class="pill pill-custom">{t(lang, "custom_badge")}</span></td>'
+            f"<td>{html.escape(spec.advisory_id)}</td>"
+            f"<td>{html.escape(t(lang, 'status_experimental'))}</td>"
+            f"<td>{html.escape(_strategy_label(spec.strategy, lang))}</td>"
+            f"<td>{expl}</td>"
+            f"<td>{html.escape(t(lang, 'custom_label'))}</td></tr>"
+        )
+
+    # Findings rows (latest first).
+    findings = getattr(core, "scan_findings", []) or []
+    find_rows = ""
+    for f in reversed(findings):
+        sev = str(f.get("severity", "info"))
+        sev_label = t(lang, "sev_" + sev) if "sev_" + sev in LANGS.get(lang, {}) else sev
+        fdetail = str(f.get("detail", ""))
+        ffile = str(f.get("file", ""))
+        fline = f.get("line")
+        file_cell = html.escape(ffile)
+        if fline is not None:
+            file_cell += f":{fline}"
+        find_rows += (
+            f'<tr><td>{html.escape(str(f.get("timestamp", "")))}</td>'
+            f"<td>{html.escape(str(f.get('check', '')))}</td>"
+            f"<td>{html.escape(sev_label)}</td>"
+            f"<td>{html.escape(fdetail)}</td>"
+            f"<td>{file_cell}</td></tr>"
+        )
+
+    # Global intel rows.
+    intel_items = intel.get("items") or []
+    intel_rows = ""
+    for item in intel_items:
+        product = item.get("product") or item.get("name") or ""
+        vendor = item.get("vendor") or ""
+        if vendor and product and not product.startswith(vendor):
+            product = f"{vendor} {product}"
+        intel_rows += (
+            f"<tr><td>{html.escape(str(item.get('id', '')))}</td>"
+            f"<td>{html.escape(str(product))}</td>"
+            f"<td>{html.escape(str(item.get('level', '')))}</td>"
+            f"<td>{html.escape(str(item.get('date', '')))}</td>"
+            f"<td>{html.escape(str(item.get('description', ''))[:200])}</td></tr>"
+        )
+    intel_status = ""
+    if intel.get("fetched_at"):
+        intel_status = t(lang, "intel_updated", time=str(intel["fetched_at"]))
+        if intel.get("stale"):
+            intel_status += " · " + t(lang, "intel_stale", time=str(intel["fetched_at"]))
+    if intel.get("sources"):
+        for src, st_src in intel["sources"].items():
+            if not st_src.get("ok"):
+                intel_status += " · " + t(lang, "intel_offline")
+                break
+    sources = ", ".join(sorted((intel.get("sources") or {}).keys())) or "CISA KEV, NVD"
+
+    # Scope panel custom-rules line.
+    if custom_errors:
+        custom_line = t(lang, "custom_invalid", n=len(custom_errors))
+    elif custom:
+        custom_line = t(lang, "custom_note", n=len(custom))
+    else:
+        custom_line = ""
+
+    # Enriched empty state (info panel, shown when no real activity yet).
+    runtime_total = st["total_intercepted"]
+    if runtime_total == 0 and not query:
+        empty_html = (
+            f'<div class="info"><h3>{t(lang, "empty_title")}</h3>'
+            f'<div class="row"><span class="k">{t(lang, "empty_version")}</span><span>{html.escape(str(posture["codename"]))}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_status")}</span><span>{html.escape(status_line)}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_rules")}</span><span>{html.escape(t(lang, "kpi_rules_sub", exp=str(len(experimental)), custom=str(len(custom)), planned=str(len(planned))))}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_custom")}</span><span>{html.escape(custom_line or t(lang, "empty_never"))}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_last_sim")}</span><span>{html.escape(sim_line)}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_last_scan")}</span><span>{html.escape(scan_line)}</span></div>'
+            f'<div class="row"><span class="k">{t(lang, "empty_how")}</span><span>{html.escape(t(lang, "empty_how_text"))}</span></div>'
+            f'<div class="note">{t(lang, "empty_note")}</div></div>'
+        )
     else:
         empty_html = ""
 
-    # --- Stored-history range label ---
-    if core.events:
-        first_ts = html.escape(str(core.events[0].get("timestamp", "")))
-        last_ts = html.escape(str(core.events[-1].get("timestamp", "")))
-        range_label = f"Riwayat tersimpan: {first_ts} s.d. {last_ts} &middot; maks. 120 event"
-    else:
-        range_label = "Riwayat kosong &middot; maks. 120 event tersimpan"
+    # I18N strings for the JS (JSON-encoded, safe to embed).
+    i18n_js = json.dumps(
+        {
+            "confirm_barrage": t(lang, "confirm_barrage"),
+            "confirm_clear": t(lang, "confirm_clear"),
+            "barrage_done": t(lang, "barrage_done"),
+            "alert_barrage_fail": t(lang, "alert_barrage_fail"),
+            "alert_clear_fail": t(lang, "alert_clear_fail"),
+            "alert_scan_fail": t(lang, "alert_scan_fail"),
+            "scan_done": t(lang, "scan_done"),
+            "scan_done_clean": t(lang, "scan_done_clean"),
+        }
+    )
 
-    css = """
-  :root {
-    --bg: #040811;
-    --panel: rgba(10, 20, 38, 0.86);
-    --border: #16365f;
-    --cyan: #00f5d4;
-    --gold: #f59e0b;
-    --crimson: #ff2a5f;
-    --text: #e6f4ff;
-    --muted: #7295b8;
-  }
-  * { box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
-  body {
-    margin: 0; padding: 24px; background: radial-gradient(circle at 50% 10%, #0c2142 0%, var(--bg) 75%);
-    color: var(--text); min-height: 100vh; overflow-x: hidden;
-  }
-  .container { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; }
-  .topbar {
-    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
-    border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px;
-  }
-  .brand { display: flex; align-items: center; gap: 14px; }
-  .core-badge {
-    width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--cyan);
-    display: grid; place-items: center; color: var(--cyan); font-weight: 700;
-    box-shadow: 0 0 18px rgba(0,245,212,0.45), inset 0 0 10px rgba(0,245,212,0.25);
-  }
-  .title { font-size: 20px; font-weight: 800; letter-spacing: 1.5px; color: var(--cyan); text-shadow: 0 0 14px rgba(0,245,212,0.4); }
-  .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .top-actions { display: flex; align-items: center; gap: 12px; }
-  .sound-toggle { font-size: 12px; color: var(--muted); cursor: pointer; }
-  .btn-secondary {
-    background: rgba(0,245,212,0.08); color: var(--text); border: 1px solid var(--border);
-    padding: 11px 20px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
-  }
-  .btn-secondary:hover { border-color: var(--cyan); }
-  .btn-danger {
-    background: transparent; color: var(--crimson); border: 1px solid var(--crimson);
-    padding: 8px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
-  }
-  .status-line { font-size: 13px; margin-bottom: 16px; color: var(--text); }
-  .dot-ok { color: var(--cyan); }
-  .sim-status { font-size: 13px; color: var(--cyan); margin-bottom: 12px; min-height: 18px; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 12px; }
-  .kpi {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 16px; position: relative; backdrop-filter: blur(8px);
-  }
-  .kpi::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, var(--cyan), transparent); }
-  .kpi-label { font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; }
-  .kpi-val { font-size: 28px; font-weight: 800; margin: 8px 0 4px; }
-  .kpi-foot { font-size: 11px; color: var(--cyan); }
-  .history-line { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
-  .scope-panel {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px;
-  }
-  .scope-panel > div {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
-  }
-  .scope-panel b { font-size: 12px; color: var(--cyan); }
-  .scope-panel p { font-size: 12px; color: var(--text); margin: 6px 0 0; line-height: 1.5; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-  .tab {
-    background: transparent; color: var(--muted); border: 1px solid var(--border);
-    padding: 8px 16px; border-radius: 6px; font-size: 12px; cursor: pointer;
-  }
-  .tab.active { color: var(--cyan); border-color: var(--cyan); }
-  .empty-state {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 20px; margin-bottom: 16px; font-size: 13px; line-height: 1.6;
-  }
-  .empty-state p { color: var(--muted); margin: 6px 0 0; }
-  .intel-note { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
-  .table-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-  .range-label { font-size: 12px; color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 12px; }
-  th { background: rgba(16, 36, 66, 0.95); color: var(--cyan); text-align: left; padding: 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; }
-  td { padding: 12px; border-top: 1px solid rgba(22, 54, 95, 0.65); vertical-align: top; }
-  .pill { display: inline-block; padding: 3px 8px; border: 1px solid; border-radius: 4px; font-size: 10px; font-weight: 700; }
-  .pill-real { border-color: var(--cyan); color: var(--cyan); }
-  .pill-sim { border-color: var(--gold); color: var(--gold); }
-  details summary { cursor: pointer; color: var(--cyan); font-size: 12px; }
-  details p { font-size: 12px; line-height: 1.6; }
-  .tech { color: var(--muted); }
-  """
+    q_esc = html.escape(query or "")
+    clear_q = f"?lang={lang}" if lang != "en" else "/"
 
-    return f"""<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<title>Manas Aegis &mdash; Perlindungan aktivitas Hermes Agent</title>
-<style>{css}</style>
-</head>
+    html_out = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MANAS AEGIS — {html.escape(t(lang, "title_sub"))}</title>
+<style>{_HUD_CSS}</style></head>
 <body>
-  <div class="container">
-    <div class="topbar">
-      <div class="brand">
-        <div class="core-badge">&#9670;</div>
-        <div>
-          <div class="title">MANAS AEGIS</div>
-          <div class="sub">Perlindungan aktivitas Hermes Agent &mdash; ALPHA</div>
-          <div class="sub">STIX 2.1 lokal &middot; Tanpa feed TAXII eksternal</div>
-        </div>
-      </div>
-      <div class="top-actions">
-        <label class="sound-toggle"><input type="checkbox" id="soundToggle"> Suara</label>
-        <button class="btn-secondary" onclick="triggerBarrage()">Jalankan simulasi lokal</button>
-      </div>
-    </div>
-
-    <div class="status-line">{status_html}</div>
-    <div id="sim-status" class="sim-status" role="status"></div>
-
-    <div class="kpi-grid">
-      <div class="kpi">
-        <div class="kpi-label">Aktivitas yang diubah agar lebih aman</div>
-        <div class="kpi-val" style="color:var(--cyan);">{stats['virtual_patched']}</div>
-        <div class="kpi-foot">Diubah oleh aturan lokal</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Aktivitas dialihkan ke honeypot</div>
-        <div class="kpi-val" style="color:var(--gold);">{stats['honeypot_deceived']}</div>
-        <div class="kpi-foot">Dialihkan ke data umpan</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Aktivitas diblokir oleh aturan</div>
-        <div class="kpi-val" style="color:var(--crimson);">{stats['hard_blocked']}</div>
-        <div class="kpi-foot">Diblokir oleh aturan lokal</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Aturan terdefinisi</div>
-        <div class="kpi-val">{posture['rules_defined']}</div>
-        <div class="kpi-foot">{total_stored} event dicatat (riwayat tersimpan, maks. 120)</div>
-      </div>
-    </div>
-    <div class="history-line">{runtime_total} aktivitas nyata ditangani dalam riwayat lokal &middot; {sim_total} event simulasi (tidak dihitung sebagai aktivitas nyata)</div>
-
-    <div class="scope-panel">
-      <div>
-        <b>Yang dipantau</b>
-        <p>Sebagian aktivitas tool Hermes Agent yang cocok dengan {posture['rules_enforced']} aturan eksperimental (lihat tabel guard di README).</p>
-      </div>
-      <div>
-        <b>Yang tidak dipindai</b>
-        <p>Plugin ini TIDAK memindai seluruh komputer, semua aplikasi, atau seluruh kerentanan pada perangkat.</p>
-      </div>
-    </div>
-
-    <div class="tabs">
-      <button id="tab-btn-aktivitas" class="tab active" onclick="showTab('aktivitas')">Aktivitas</button>
-      <button id="tab-btn-intel" class="tab" onclick="showTab('intel')">Intelijen ancaman</button>
-    </div>
-
-    <div id="tab-aktivitas">
-      {empty_html}
-      <div class="table-bar">
-        <span class="range-label">{range_label}</span>
-        <button class="btn-danger" onclick="clearHistory()">Hapus riwayat</button>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Waktu</th>
-            <th>Sumber</th>
-            <th>Aturan cocok</th>
-            <th>Tindakan</th>
-            <th>Detail</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows}
-        </tbody>
-      </table>
-    </div>
-
-    <div id="tab-intel" style="display:none;">
-      <p class="intel-note">Informasi global dari katalog aturan &mdash; belum ditemukan pada perangkat ini.</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Aturan</th>
-            <th>ID advisori internal</th>
-            <th>Status</th>
-            <th>Tindakan</th>
-            <th>Catatan</th>
-          </tr>
-        </thead>
-        <tbody>
-          {catalog_rows}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
+<div class="top">
+<div>
+<div class="badge">◆ MANAS AEGIS</div>
+<h1>MANAS AEGIS</h1>
+<div class="sub">{t(lang, "title_sub")}</div>
+<div class="sub2">{t(lang, "title_sub2")}</div>
+</div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<label style="font-size:12px;color:var(--mut)">{t(lang, "lang_label")}</label>
+<select id="langSel" onchange="setLang(this.value)">{lang_options}</select>
+<button class="btn" onclick="toggleSound()">🔊 {t(lang, "sound")}</button>
+<button class="btn" onclick="triggerBarrage()">▶ {t(lang, "run_sim")}</button>
+</div>
+</div>
+<div class="status">{html.escape(status_line)}</div>
+<div class="kpis">
+<div class="kpi"><div class="n">{st["hard_blocked"]}</div><div class="l">{t(lang, "kpi_blocked")}</div><div class="f">{t(lang, "kpi_blocked_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_block)}</div></div>
+<div class="kpi"><div class="n">{st["virtual_patched"]}</div><div class="l">{t(lang, "kpi_modified")}</div><div class="f">{t(lang, "kpi_modified_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_modify)}</div></div>
+<div class="kpi"><div class="n">{st["honeypot_deceived"]}</div><div class="l">{t(lang, "kpi_honeypot")}</div><div class="f">{t(lang, "kpi_honeypot_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_deceive)}</div></div>
+<div class="kpi"><div class="n">{posture["rules_defined"]}</div><div class="l">{t(lang, "kpi_rules")}</div><div class="f">{t(lang, "kpi_events", n=total)}</div><div class="s">{t(lang, "kpi_rules_sub", exp=str(len(experimental)), custom=str(len(custom)), planned=str(len(planned)))}</div></div>
+</div>
+<div class="hist">{html.escape(range_label)}</div>
+<div class="hist">{html.escape(t(lang, "history_line", real=str(hist["real"]), sim=str(hist["sim"])))}</div>
+<div class="hist">{html.escape(sim_line)}</div>
+<div class="scope">
+<h3>{t(lang, "scope_monitored")}</h3>
+<p>{t(lang, "scope_monitored_text", n=str(len(experimental)))}</p>
+{"<p>" + html.escape(custom_line) + "</p>" if custom_line else ""}
+<h3>{t(lang, "scope_not")}</h3>
+<p>{t(lang, "scope_not_text")}</p>
+</div>
+<div class="scanrow">
+<button class="btn" onclick="runScan('quick')">🔍 {t(lang, "scan_quick")}</button>
+<button class="btn" onclick="runScan('full')">🔍 {t(lang, "scan_full")}</button>
+<button class="btn" onclick="runScan('network')">🔍 {t(lang, "scan_network")}</button>
+</div>
+<div class="scanline">{html.escape(scan_line)}</div>
+<div class="tabs">
+<button class="tab active" onclick="showTab('act',this)">{t(lang, "tab_activity")}</button>
+<button class="tab" onclick="showTab('intel',this)">{t(lang, "tab_intel")}</button>
+<button class="tab" onclick="showTab('find',this)">{t(lang, "tab_findings")}</button>
+</div>
+<div class="panel active" id="tab-act">
+<form class="search" method="get" action="">
+<input type="hidden" name="lang" value="{lang}">
+<input name="q" value="{q_esc}" placeholder="{html.escape(t(lang, 'search_placeholder'))}">
+<button class="btn" type="submit">{t(lang, "search_button")}</button>
+{f'<a href="{clear_q}">{t(lang, "search_clear")}</a>' if query else ""}
+</form>
+{f'<div class="hist">{html.escape(search_note)}</div>' if search_note else ""}
+{empty_html if empty_html else ""}
+{f'<table><tr><th>{t(lang, "col_time")}</th><th>{t(lang, "table_source")}</th><th>{t(lang, "col_rule")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "col_detail")}</th></tr>{rows}</table>' if rows else ("" if empty_html else f'<div class="empty">{t(lang, "no_activity")}</div>')}
+<div style="margin-top:10px"><button class="btn" onclick="clearHistory()">{t(lang, "clear_history")}</button></div>
+</div>
+<div class="panel" id="tab-intel">
+<h3 style="font-size:13px">{t(lang, "intel_global_title")}</h3>
+<div class="note">{t(lang, "intel_global_note", sources=sources)}</div>
+{f'<div class="note">{html.escape(intel_status)}</div>' if intel_status else ""}
+<div style="margin:8px 0"><button class="btn" onclick="refreshIntel()">{t(lang, "intel_refresh")}</button></div>
+{f'<table><tr><th>{t(lang, "intel_col_id")}</th><th>{t(lang, "intel_col_product")}</th><th>{t(lang, "intel_col_level")}</th><th>{t(lang, "intel_col_date")}</th><th>{t(lang, "intel_explain")}</th></tr>{intel_rows}</table>' if intel_rows else f'<div class="empty">{t(lang, "intel_none")}</div>'}
+<h3 style="font-size:13px;margin-top:18px">{t(lang, "tab_intel")}</h3>
+<table><tr><th>{t(lang, "col_rule")}</th><th>{t(lang, "intel_advisory")}</th><th>{t(lang, "intel_status")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "intel_explain")}</th><th>{t(lang, "intel_note_col")}</th></tr>{cat_rows}</table>
+<div class="note">{t(lang, "intel_note")}</div>
+</div>
+<div class="panel" id="tab-find">
+{f'<table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>File</th></tr>{find_rows}</table>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
+</div>
 <script>
-function showTab(name) {{
-  document.getElementById('tab-aktivitas').style.display = name === 'aktivitas' ? '' : 'none';
-  document.getElementById('tab-intel').style.display = name === 'intel' ? '' : 'none';
-  document.getElementById('tab-btn-aktivitas').classList.toggle('active', name === 'aktivitas');
-  document.getElementById('tab-btn-intel').classList.toggle('active', name === 'intel');
-}}
-
-function soundEnabled() {{
-  try {{
-    return localStorage.getItem('manas-aegis-sound') === 'on';
-  }} catch (e) {{ return false; }}
-}}
-
-(function initSoundToggle() {{
-  var toggle = document.getElementById('soundToggle');
-  if (!toggle) return;
-  toggle.checked = soundEnabled();
-  toggle.addEventListener('change', function () {{
-    try {{ localStorage.setItem('manas-aegis-sound', toggle.checked ? 'on' : 'off'); }} catch (e) {{}}
-  }});
-}})();
-
-function playChime() {{
-  if (!soundEnabled()) return;
-  try {{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [528, 792, 1056].forEach((freq, idx) => {{
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.07);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.07);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.07 + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + idx * 0.07);
-      osc.stop(ctx.currentTime + idx * 0.07 + 0.35);
-    }});
-  }} catch (e) {{}}
-}}
-
-async function triggerBarrage() {{
-  var ok = confirm('Jalankan simulasi lokal? Plugin akan menguji enam contoh input terhadap aturan lokal dan menambahkan hasil berlabel SIMULASI ke riwayat. Ini tidak memindai komputer, tidak menjalankan serangan sungguhan, dan tidak membuktikan semua serangan dapat dicegah.');
-  if (!ok) return;
-  playChime();
-  try {{
-    const res = await fetch('/api/barrage', {{ method: 'POST' }});
-    if (res.ok) {{
-      const data = await res.json();
-      const results = (data && data.results) || [];
-      var matched = 0;
-      results.forEach(function (r) {{
-        var action = r && r.manas_verdict && r.manas_verdict.action;
-        if (action === 'block' || action === 'modify') matched += 1;
-      }});
-      document.getElementById('sim-status').textContent = 'Simulasi selesai — ' + matched + ' dari 6 contoh cocok dengan aturan.';
-      setTimeout(() => window.location.reload(), 2000);
-    }}
-  }} catch (e) {{
-    alert('Simulasi tidak dapat dijalankan dari HUD. Coba perintah /manas-barrage di Hermes.');
-  }}
-}}
-
-async function clearHistory() {{
-  var ok = confirm('Hapus seluruh riwayat aktivitas lokal? Tindakan ini tidak dapat dibatalkan.');
-  if (!ok) return;
-  try {{
-    const res = await fetch('/api/clear-history', {{ method: 'POST' }});
-    if (res.ok) {{
-      window.location.reload();
-    }}
-  }} catch (e) {{
-    alert('Riwayat tidak dapat dihapus saat ini.');
-  }}
-}}
+const I18N = {i18n_js};
+let soundOn = localStorage.getItem('manas-aegis-sound') === '1';
+function setLang(v){{localStorage.setItem('manas-aegis-lang', v); const u = new URL(location.href); u.searchParams.set('lang', v); location.href = u.toString();}}
+(function(){{const s = localStorage.getItem('manas-aegis-lang'); const u = new URL(location.href); if(!u.searchParams.get('lang') && s && s !== document.documentElement.lang){{u.searchParams.set('lang', s); location.replace(u.toString());}}}})();
+function showTab(id, el){{document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.getElementById('tab-' + id).classList.add('active'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); el.classList.add('active');}}
+function toggleSound(){{soundOn = !soundOn; localStorage.setItem('manas-aegis-sound', soundOn ? '1' : '0');}}
+async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
+async function clearHistory(){{if(!confirm(I18N.confirm_clear)) return; try{{const r = await fetch('/api/clear-history', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{location.reload();}} else {{alert(I18N.alert_clear_fail);}}}} catch(e){{alert(I18N.alert_clear_fail);}}}}
+async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); location.reload();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
+async function refreshIntel(){{try{{await fetch('/api/intel-refresh', {{method: 'POST'}}); setTimeout(() => location.reload(), 4000);}} catch(e){{}}}}
 </script>
 </body>
 </html>"""
+    return html_out
 
 
-
-def write_hud_snapshot(core: ManasAegisCore) -> Path:
-    html_str = build_analytical_hud_html(core)
+def write_hud_snapshot(core: ManasAegisCore, lang: Optional[str] = None) -> Path:
+    html_str = build_analytical_hud_html(core, lang=lang or getattr(core, "last_lang", "en"))
     hud_file = core.state_dir / "dashboard.html"
     hud_file.write_text(html_str, encoding="utf-8")
     return hud_file
@@ -458,7 +525,33 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         core = get_core()
-        if self.path == "/api/stix":
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/search":
+            qs = parse_qs(parsed.query)
+            q = (qs.get("q", [""])[0] or "").strip()
+            results = core.search_events(q)
+            trimmed = [
+                {
+                    "timestamp": e.get("timestamp", ""),
+                    "source": e.get("source", ""),
+                    "rule_id": e.get("rule_id", ""),
+                    "codename": e.get("codename", ""),
+                    "cve_id": e.get("cve_id", ""),
+                    "tool_name": e.get("tool_name", ""),
+                    "verdict": e.get("verdict", ""),
+                    "evidence": (e.get("evidence", "") or "")[:300],
+                }
+                for e in results
+            ]
+            payload = json.dumps(
+                {"status": "ok", "query": q, "count": len(trimmed), "results": trimmed}
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if parsed.path == "/api/stix":
             payload = json.dumps([e["stix_bundle"] for e in core.events[-25:]], indent=2).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -466,7 +559,11 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
 
-        html_bytes = build_analytical_hud_html(core).encode("utf-8")
+        qs = parse_qs(parsed.query)
+        lang = (qs.get("lang", ["en"])[0] or "en").strip()
+        q = (qs.get("q", [""])[0] or "").strip()
+        core.last_lang = lang
+        html_bytes = build_analytical_hud_html(core, lang=lang, query=q or None).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
@@ -484,22 +581,34 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
         if self.path == "/api/clear-history":
-            cleared = len(core.events)
-            core.events = []
-            telemetry_file = core.state_dir / "manas_telemetry.json"
-            try:
-                if telemetry_file.exists():
-                    telemetry_file.unlink()
-            except Exception:
-                pass
-            stix_file = core.state_dir / "stix21_taxii_feed.json"
-            try:
-                if stix_file.exists():
-                    stix_file.unlink()
-            except Exception:
-                pass
+            cleared = core.clear_all_history()
             write_hud_snapshot(core)
             payload = json.dumps({"status": "ok", "cleared": cleared}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/api/scan":
+            length = int(self.headers.get("Content-Length") or 0)
+            scope = "quick"
+            if length:
+                try:
+                    payload_in = json.loads(self.rfile.read(length).decode("utf-8"))
+                    scope = str(payload_in.get("scope", "quick"))
+                except Exception:
+                    scope = "quick"
+            summary = core.run_scan(scope, hud_ok=_SERVER_OK)
+            write_hud_snapshot(core)
+            payload = json.dumps({"status": "ok", "scan": summary}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/api/intel-refresh":
+            threading.Thread(target=core.refresh_threat_intel, daemon=True).start()
+            payload = json.dumps({"status": "ok", "refreshing": True}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -518,6 +627,35 @@ def ensure_hud_server_running(port: int = 18777) -> str:
             t.start()
             _SERVER_STARTED = True
             _SERVER_OK = True
+            # Background threat-intel refresh: every 10 minutes, refresh
+            # the global intel cache when it is missing or older than
+            # 6 hours. Never raises; a failed refresh leaves the old
+            # cache in place (and the HUD says so).
+            def _intel_refresh_loop() -> None:
+                while True:
+                    try:
+                        core = get_core()
+                        intel = core.threat_intel or {}
+                        fetched = str(intel.get("fetched_at", ""))
+                        stale = True
+                        if fetched:
+                            try:
+                                from datetime import datetime, timezone
+
+                                age = (
+                                    datetime.now(timezone.utc)
+                                    - datetime.fromisoformat(fetched.replace("Z", "+00:00"))
+                                ).total_seconds()
+                                stale = age > 6 * 3600
+                            except Exception:
+                                stale = True
+                        if stale or not intel.get("items"):
+                            core.refresh_threat_intel()
+                    except Exception:
+                        pass
+                    time.sleep(600)
+
+            threading.Thread(target=_intel_refresh_loop, daemon=True).start()
         except Exception:
             _SERVER_OK = False
     return f"http://127.0.0.1:{port}"

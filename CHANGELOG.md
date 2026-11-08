@@ -5,6 +5,99 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.4.0-alpha] — 2026-11-09
+
+Revisi Fase R2 (atas permintaan MyLord, satu per satu dari chat):
+i18n HUD (Inggris default, 15 bahasa), simulasi yang terlihat
+persisten, aturan khusus yang bisa ditambah/diedit pengguna, pindai
+(quick/full/network) + tab Temuan, riwayat tanpa batas + pencarian,
+empty state yang kaya informasi, dan intelijen ancaman global
+real-time + kolom penjelasan awam/profesional. **Keputusan guard
+(blokir/ubah) tidak berubah** — yang berubah adalah bahasa,
+visibilitas, dan alat bantu di sekitarnya, bukan logika pemblokiran.
+
+### Ditambah
+
+- **i18n HUD (15 bahasa, Inggris default).** `hermes_manas_aegis/i18n.py`:
+  Inggris, Indonesia, Spanyol, Prancis, Jerman, Portugis, Italia,
+  Rusia, Turki, Arab, Hindi, Tionghoa, Jepang, Korea, Vietnam.
+  Menu bahasa di kanan atas HUD; pilihan tersimpan di browser;
+  `?lang=` di URL juga didukung; bahasa tak dikenal jatuh ke Inggris.
+  Nama aturan, ID advisori, dan CWE tidak diterjemahkan.
+  Penjelasan awam/profesional tersedia dalam Inggris + Indonesia,
+  bahasa lain menampilkan penjelasan Inggris.
+- **Simulasi terlihat persisten.** Ringkasan simulasi terakhir
+  (waktu, berapa dari 6 contoh yang cocok, berapa diblokir/diubah/
+  dialihkan) kini tersimpan dan tampil di HUD — tidak lagi hilang
+  saat halaman dimuat ulang. Setiap kartu KPI juga menampilkan
+  sub-jumlah simulasinya (`simulation: N`). Kartu besar tetap
+  menghitung **hanya aktivitas nyata** — simulasi tidak pernah
+  menggelembungkan angka nyata (itu ketidakjujuran v2.2.0 yang
+  diperbaiki R1 dan dipertahankan di sini).
+- **Aturan khusus (custom rules).** File
+  `~/.hermes/manas-aegis-custom-rules.json` (di home, bukan di
+  direktori plugin, supaya tidak ikut terhapus saat install ulang):
+  `rules[]` (aturan baru, `rule_id` harus diawali `CUSTOM-`) dan
+  `overrides{}` (mengganti pola utama MANAS-SQLI-AST,
+  MANAS-SHELL-RCE, MANAS-CONFIG-FIM, MANAS-MEM-FIREWALL).
+  Validasi penuh saat dimuat (regex harus bisa dikompilasi,
+  `test_positive`/`test_negative` harus lolos, override aturan
+  yang tidak dikenal ditolak); entri tidak valid ditolak dan
+  dicatat sebagai error — plugin tidak pernah mati karena file
+  aturan yang rusak. Aturan khusus yang valid benar-benar
+  dijalankan engine dan muncul di katalog HUD dengan badge "custom".
+- **Pindai (quick / full / network) + tab Temuan.**
+  Quick: integritas konfigurasi vs baseline persisten
+  (`cce_baseline.json`), decoy honeypot, validasi aturan khusus,
+  backstop telemetri, self-test aturan. Full: quick + pemindaian
+  isi file di `~/.hermes` (pola injeksi prompt, karakter zero-width,
+  secret di luar file kredensial yang dikenal, heuristik token bomb;
+  maks. 300 file / 1 MB per file; direktori plugin dilewati).
+  Network: **hanya** postur jaringan plugin sendiri (HUD loopback,
+  izin file state, postur SSRF) — **bukan** port scan dan **bukan**
+  pemindaian LAN/internet. Temuan tersimpan (`scan_state.json`,
+  maks. 50, duplikat digabung) dan tampil di tab Temuan — itulah
+  "notifikasi" plugin ini; tidak ada saluran push.
+- **Riwayat tanpa batas + pencarian.** Cap 120 event **dihapus**.
+  File live menyimpan 500 event terbaru (agar HUD cepat dimuat);
+  event yang lebih lama pindah ke arsip append-only
+  (`manas_telemetry_archive.jsonl`) yang tidak pernah dihapus
+  plugin — kecuali lewat "Hapus riwayat" (yang juga menghapus
+  arsip). Kotak pencarian di tab Aktivitas + endpoint
+  `/api/search?q=...` mencari riwayat live dan arsip.
+- **Empty state kaya informasi.** Saat belum ada aktivitas nyata,
+  panel kosong kini menampilkan versi, status koneksi, jumlah
+  aturan (eksperimental + khusus + terencana), aturan khusus,
+  simulasi terakhir, pindai terakhir, dan cara memunculkan
+  aktivitas — bukan sekadar satu kalimat.
+- **Intelijen ancaman global real-time.** Diambil otomatis dari
+  **CISA KEV** dan **NVD CVE API 2.0** (keduanya gratis, tanpa
+  kunci, resmi), cache lokal `threat_intel.json` (maks. 40 item),
+  refresh otomatis tiap 10 menit bila cache lebih tua dari 6 jam +
+  tombol "Perbarui intelijen". Tanpa internet, cache lama tetap
+  ditampilkan dan HUD menulis dengan jelas bahwa data mungkin
+  kedaluwarsa. Ditampilkan sebagai **kewaspadaan global** — plugin
+  TIDAK memeriksa apakah perangkat ini terdampak.
+- **Kolom Penjelasan di katalog aturan.** Setiap aturan punya
+  penjelasan dua tingkat: "Untuk semua orang" (bahasa awam) dan
+  "Untuk profesional keamanan" (pola/trigger dan batasnya).
+
+### Diubah
+
+- **Bahasa default HUD: Inggris** (sebelumnya Indonesia).
+  Tes R1 yang mengasumsikan Indonesia kini memanggil HUD dengan
+  `lang="id"` secara eksplisit.
+- **Baseline konfigurasi kini persisten** (`cce_baseline.json`) dan
+  **dibandingkan ulang** oleh quick scan — baris MANAS-CONFIG-FIM
+  di README diperbarui (tetap bukan FIM sungguhan: tidak ada
+  pemantauan real-time).
+- **"Hapus riwayat" kini juga menghapus arsip** (live + archive +
+  feed STIX), bukan hanya file live.
+- **Unit test: 23/23 lulus** (6 V22 + 6 R1 + 11 R2 baru).
+  **E2E: 27/27 lulus** (HTTP nyata: default Inggris, `?lang=id`,
+  fallback bahasa tak dikenal, barrage → ringkasan persisten,
+  pencarian, pindai, refresh intel, hapus riwayat).
+
 ## [2.3.0-alpha] — 2026-11-09
 
 Revisi Fase R1: klaim diluruskan, label alpha, dokumentasi
