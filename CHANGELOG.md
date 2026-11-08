@@ -5,6 +5,49 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.5.1-alpha] — 2026-11-09
+
+Revisi R2.5.1 (atas laporan MyLord + screenshot: simulasi sudah
+dijalankan tapi kartu KPI tetap 0; pindai Quick Scan "tidak masuk
+ke browse/library"). Dua bug + satu integrasi yang belum terbukti.
+
+### Diperbaiki
+
+- **Sub-jumlah simulasi 0/0/0 (BUG).** Kartu KPI menghitung sub-jumlah
+  simulasi dengan pencocokan persis (`verdict == "BLOCK"`), padahal
+  string verdict sebenarnya adalah `"HARD_BLOCK"`,
+  `"SYNTHESIZED_PATCH (Modify Args)"`, dan
+  `"HONEYPOT_DECEIVED (Modify Args)"`. Hasilnya: 12 event simulasi
+  MyLord (8 blocked, 2 modified, 2 deceived) terbaca 0/0/0.
+  Sekarang memakai pencocokan substring yang sama seperti
+  `get_last_simulation()` dan counter posture (`"BLOCK" in verdict`).
+  Ringkasan "Last simulation" sudah benar dari dulu (pakai substring)
+  — hanya sub-jumlah per kartu yang salah.
+- **Pindai tidak membawa ke hasil (UX).** Sesudah Quick/Full/Network
+  Scan, halaman hanya me-reload di tab Activity, jadi temuan
+  tersembunyi di tab Findings dan MyLord mengira pindai tidak jalan.
+  Sekarang sesudah pindai sukses, halaman pindah ke tab Findings
+  (`?tab=find`, dipertahankan di URL; server me-render tab yang
+  diminta, fallback ke Activity bila param tidak dikenal).
+  Pencarian tetap di tab Activity (hidden input `tab=act`).
+
+### Ditambah
+
+- **Jalur data real terbukti.** `intercept_tool_call` punya
+  `event_source="runtime"` (default) — jalur yang sama dipakai
+  Hermes saat agen benar-benar memanggil tool. Diuji langsung di
+  PC (bukan simulasi): 1 panggilan shell destruktif diblokir
+  (HARD_BLOCK), 1 argumen dimodifikasi, 1 kredensial dialihkan ke
+  honeypot. Ketiganya tercatat sebagai event REAL (source=runtime)
+  dan menaikkan kartu KPI. Data real selanjutnya muncul otomatis
+  setiap agen Hermes memanggil tool — plugin tidak bisa
+  "mendeteksi" tool yang tidak pernah dipanggil.
+- **Unit test: 32/28 lulus** — 28 lama + 4 baru R2.5.1 (sub-jumlah
+  sim dengan string verdict asli incl. reproduksi telemetri MyLord
+  12 event → 8/2/2, param tab, redirect pindai). **E2E: 19/19
+  lulus** (HTTP nyata: sub-jumlah sim non-nol + jumlah 6, tab=find,
+  pindai → Findings, intercept real → counter real > 0).
+
 ## [2.5.0-alpha] — 2026-11-09
 
 Revisi R2.5 (atas perintah MyLord: "UI-UX nya jangan AI SLOP lah,

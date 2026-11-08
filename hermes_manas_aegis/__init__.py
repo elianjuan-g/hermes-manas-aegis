@@ -263,9 +263,11 @@ def _intel_level_pill(level: str) -> str:
     return "pill-info"
 
 
-def build_analytical_hud_html(core, lang="en", query=None) -> str:
+def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> str:
     if lang not in {c for c, _ in SUPPORTED_LANGS}:
         lang = DEFAULT_LANG
+    if active_tab not in ("act", "intel", "find"):
+        active_tab = "act"
     posture = core.get_system_posture()
     st = posture["stats"]
     total = st["total_stored"]
@@ -279,16 +281,26 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
     planned = [r for r in THREAT_MATRIX.values() if r.status == "planned"]
 
     # Simulation subcounts per KPI card (live events only).
+    # Verdict strings are "HARD_BLOCK", "SYNTHESIZED_PATCH (Modify Args)",
+    # "HONEYPOT_DECEIVED (Modify Args)" — match by substring, exactly like
+    # get_last_simulation() and the posture counters do. Exact equality
+    # ("BLOCK") matched nothing and showed 0/0/0 even after a real run
+    # (bug found 2026-11-09 from MyLord's screenshot: 12 sim events,
+    # all subcounts 0).
     sim_block = sum(
-        1 for e in core.events if e.get("source") == "simulation" and e.get("verdict") == "BLOCK"
+        1
+        for e in core.events
+        if e.get("source") == "simulation" and "BLOCK" in str(e.get("verdict", ""))
     )
     sim_modify = sum(
         1
         for e in core.events
-        if e.get("source") == "simulation" and e.get("verdict") == "SYNTHESIZED"
+        if e.get("source") == "simulation" and "SYNTHESIZED" in str(e.get("verdict", ""))
     )
     sim_deceive = sum(
-        1 for e in core.events if e.get("source") == "simulation" and e.get("verdict") == "HONEYPOT"
+        1
+        for e in core.events
+        if e.get("source") == "simulation" and "HONEYPOT" in str(e.get("verdict", ""))
     )
 
     # Status line.
@@ -530,9 +542,9 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
 <div><div class="brand-name">MANAS AEGIS</div><div class="brand-sub">{html.escape(t(lang, "title_sub"))}</div></div>
 </div>
 <div class="nav-label">{html.escape(t(lang, "nav_monitor"))}</div>
-<button class="tab active" onclick="showTab('act',this)">{_svg(_SVG_ACTIVITY)}<span>{t(lang, "tab_activity")}</span></button>
-<button class="tab" onclick="showTab('intel',this)">{_svg(_SVG_SHIELD)}<span>{t(lang, "tab_intel")}</span></button>
-<button class="tab" onclick="showTab('find',this)">{_svg(_SVG_SEARCH)}<span>{t(lang, "tab_findings")}</span></button>
+<button class="tab{" active" if active_tab == "act" else ""}" onclick="showTab('act',this)">{_svg(_SVG_ACTIVITY)}<span>{t(lang, "tab_activity")}</span></button>
+<button class="tab{" active" if active_tab == "intel" else ""}" onclick="showTab('intel',this)">{_svg(_SVG_SHIELD)}<span>{t(lang, "tab_intel")}</span></button>
+<button class="tab{" active" if active_tab == "find" else ""}" onclick="showTab('find',this)">{_svg(_SVG_SEARCH)}<span>{t(lang, "tab_findings")}</span></button>
 <div class="sidebar-foot">
 <div>{html.escape(str(posture["codename"]))}</div>
 <div>{html.escape(status_line)}</div>
@@ -579,9 +591,10 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
 </div>
 <div class="scanline">{html.escape(scan_line)}</div>
 </div>
-<div class="panel active" id="tab-act">
+<div class="panel{" active" if active_tab == "act" else ""}" id="tab-act">
 <form class="search" method="get" action="">
 <input type="hidden" name="lang" value="{lang}">
+<input type="hidden" name="tab" value="act">
 <input name="q" value="{q_esc}" placeholder="{html.escape(t(lang, 'search_placeholder'))}">
 <button class="btn" type="submit">{_svg(_SVG_SEARCH)}<span>{t(lang, "search_button")}</span></button>
 {f'<a href="{clear_q}">{t(lang, "search_clear")}</a>' if query else ""}
@@ -591,7 +604,7 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
 {f'<div class="tablewrap"><table><tr><th>{t(lang, "col_time")}</th><th>{t(lang, "table_source")}</th><th>{t(lang, "col_rule")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "col_detail")}</th></tr>{rows}</table></div>' if rows else ("" if empty_html else f'<div class="empty">{t(lang, "no_activity")}</div>')}
 <div style="margin-top:12px"><button class="btn" onclick="clearHistory()">{_svg(_SVG_TRASH)}<span>{t(lang, "clear_history")}</span></button></div>
 </div>
-<div class="panel" id="tab-intel">
+<div class="panel{" active" if active_tab == "intel" else ""}" id="tab-intel">
 <h3 class="section-title">{t(lang, "intel_global_title")}</h3>
 <div class="note">{t(lang, "intel_global_note", sources=sources)}</div>
 {f'<div class="note">{html.escape(intel_status)}</div>' if intel_status else ""}
@@ -601,7 +614,7 @@ def build_analytical_hud_html(core, lang="en", query=None) -> str:
 <div class="tablewrap"><table><tr><th>{t(lang, "col_rule")}</th><th>{t(lang, "intel_advisory")}</th><th>{t(lang, "intel_status")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "intel_explain")}</th><th>{t(lang, "intel_note_col")}</th></tr>{cat_rows}</table></div>
 <div class="note">{t(lang, "intel_note")}</div>
 </div>
-<div class="panel" id="tab-find">
+<div class="panel{" active" if active_tab == "find" else ""}" id="tab-find">
 {f'<div class="tablewrap"><table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>File</th></tr>{find_rows}</table></div>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
 </div>
 </main>
@@ -620,7 +633,7 @@ function showTab(id, el){{document.querySelectorAll('.panel').forEach(p => p.cla
 function toggleSound(){{soundOn = !soundOn; localStorage.setItem('manas-aegis-sound', soundOn ? '1' : '0');}}
 async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
 async function clearHistory(){{if(!confirm(I18N.confirm_clear)) return; try{{const r = await fetch('/api/clear-history', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{location.reload();}} else {{alert(I18N.alert_clear_fail);}}}} catch(e){{alert(I18N.alert_clear_fail);}}}}
-async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); location.reload();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
+async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); const u = new URL(location.href); u.searchParams.set('tab', 'find'); u.searchParams.delete('q'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
 async function refreshIntel(){{try{{await fetch('/api/intel-refresh', {{method: 'POST'}}); setTimeout(() => location.reload(), 4000);}} catch(e){{}}}}
 </script>
 </body>
@@ -678,8 +691,9 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
         lang = (qs.get("lang", ["en"])[0] or "en").strip()
         q = (qs.get("q", [""])[0] or "").strip()
+        tab = (qs.get("tab", ["act"])[0] or "act").strip()
         core.last_lang = lang
-        html_bytes = build_analytical_hud_html(core, lang=lang, query=q or None).encode("utf-8")
+        html_bytes = build_analytical_hud_html(core, lang=lang, query=q or None, active_tab=tab).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()

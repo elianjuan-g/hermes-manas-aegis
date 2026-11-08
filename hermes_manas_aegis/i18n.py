@@ -1,4 +1,4 @@
-"""Manas Aegis HUD translations (v2.5.0-alpha).
+"""Manas Aegis HUD translations (v2.5.1-alpha).
 
 English is the default language. Every language must define every key
 in the English dict; t() falls back to English for any missing key, and
@@ -1855,11 +1855,11 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-SYMLINK-GUARD": {
         "en": {
             "lay": "Planned: stops traps that use file links (symlinks) pointing at another file.",
-            "pro": "Planned — no enforcement in v2.5.0-alpha.",
+            "pro": "Planned — no enforcement in v2.5.1-alpha.",
         },
         "id": {
             "lay": "Direncanakan: menghentikan jebakan yang memakai tautan berkas (symlink) yang menunjuk ke berkas lain.",
-            "pro": "Direncanakan — tanpa enforcement di v2.5.0-alpha.",
+            "pro": "Direncanakan — tanpa enforcement di v2.5.1-alpha.",
         },
     },
     "MANAS-SQLI-AST": {
@@ -1885,11 +1885,11 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-CALLID-RACE": {
         "en": {
             "lay": "Planned: stops two sessions fighting over the same call ID.",
-            "pro": "Planned — no enforcement in v2.5.0-alpha.",
+            "pro": "Planned — no enforcement in v2.5.1-alpha.",
         },
         "id": {
             "lay": "Direncanakan: menghentikan dua sesi yang berebut call ID yang sama.",
-            "pro": "Direncanakan — tanpa enforcement di v2.5.0-alpha.",
+            "pro": "Direncanakan — tanpa enforcement di v2.5.1-alpha.",
         },
     },
 }

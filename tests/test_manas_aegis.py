@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.5.0-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.5.1-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -464,7 +464,7 @@ class TestManasAegisR2(unittest.TestCase):
 
 
 class TestManasAegisR25(unittest.TestCase):
-    """R2.5 (v2.5.0-alpha): CISO-design HUD + dark/light themes.
+    """R2.5 (v2.5.1-alpha): CISO-design HUD + dark/light themes.
 
     The redesign is visual-only: same strings, same endpoints, same
     behavior. These tests pin the new design tokens and the theme
@@ -573,6 +573,86 @@ class TestManasAegisR25(unittest.TestCase):
         ):
             self.assertIn(s, h, f"missing string after redesign: {s}")
         self.assertNotIn("max. 120", h)
+
+
+class TestManasAegisR251(unittest.TestCase):
+    """R2.5.1 (v2.5.1-alpha): simulation subcounts + scan-to-Findings UX.
+
+    Root cause of MyLord's 2026-11-09 screenshot (12 sim events, all
+    subcounts 0): the HUD matched verdicts by exact equality
+    ("BLOCK"), but the real verdict strings are "HARD_BLOCK",
+    "SYNTHESIZED_PATCH (Modify Args)" and
+    "HONEYPOT_DECEIVED (Modify Args)". get_last_simulation() already
+    used substring matching; the HUD subcounts did not.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.environ["HOME"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "HOME", None)
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+
+    def test_sim_subcounts_use_real_verdict_strings(self):
+        # Run the real barrage (6 vectors) and check the KPI subcounts.
+        results = self.core.execute_barrage_simulation()
+        self.assertEqual(len(results), 6)
+        h = build_analytical_hud_html(self.core, lang="en")
+        # The barrage must produce at least one of each kind; the HUD
+        # subcounts must reflect them (they were 0/0/0 before the fix).
+        import re
+
+        subs = re.findall(r"simulation: (\d+)", h)
+        self.assertEqual(len(subs), 3)
+        blocked, modified, deceived = (int(x) for x in subs)
+        self.assertGreater(blocked, 0, "blocked subcount must be > 0 after a barrage")
+        self.assertGreater(modified, 0, "modified subcount must be > 0 after a barrage")
+        self.assertGreater(deceived, 0, "deceived subcount must be > 0 after a barrage")
+        self.assertEqual(blocked + modified + deceived, 6)
+
+    def test_sim_subcounts_match_my_lord_telemetry(self):
+        # Reproduce the exact telemetry MyLord screenshotted: 12 sim
+        # events, verdicts HARD_BLOCK x8, SYNTHESIZED_PATCH x2,
+        # HONEYPOT_DECEIVED x2. Subcounts must read 8/2/2, not 0/0/0.
+        from hermes_manas_aegis.core_engine import THREAT_MATRIX
+
+        spec = THREAT_MATRIX["MANAS-SHELL-RCE"]
+        for _ in range(8):
+            self.core._log_stix_event(
+                spec, "s", "tool", "ev", 1.35, 50, "A", "HARD_BLOCK", source="simulation"
+            )
+        for _ in range(2):
+            self.core._log_stix_event(
+                spec, "s", "tool", "ev", 1.35, 50, "A",
+                "SYNTHESIZED_PATCH (Modify Args)", source="simulation",
+            )
+        for _ in range(2):
+            self.core._log_stix_event(
+                spec, "s", "tool", "ev", 1.35, 50, "A",
+                "HONEYPOT_DECEIVED (Modify Args)", source="simulation",
+            )
+        h = build_analytical_hud_html(self.core, lang="en")
+        import re
+
+        subs = re.findall(r"simulation: (\d+)", h)
+        self.assertEqual([int(x) for x in subs], [8, 2, 2])
+
+    def test_active_tab_param(self):
+        h = build_analytical_hud_html(self.core, lang="en", active_tab="find")
+        self.assertIn('<div class="panel active" id="tab-find">', h)
+        self.assertIn('<div class="panel" id="tab-act">', h)
+        # Exactly one nav button active.
+        self.assertEqual(h.count('class="tab active"'), 1)
+        h2 = build_analytical_hud_html(self.core, lang="en", active_tab="bogus")
+        self.assertIn('<div class="panel active" id="tab-act">', h2)
+
+    def test_scan_redirects_to_findings(self):
+        h = build_analytical_hud_html(self.core, lang="en")
+        # After a scan, the JS navigates to ?tab=find (was location.reload()).
+        self.assertIn("u.searchParams.set('tab', 'find')", h)
+        self.assertIn("u.searchParams.delete('q')", h)
+        # The search form keeps the Activity tab.
+        self.assertIn('<input type="hidden" name="tab" value="act">', h)
 
 
 if __name__ == "__main__":
