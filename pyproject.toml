@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-manas-aegis"
+version = "2.3.0"
+description = "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks with local telemetry and a loopback HUD. Opt-in, test environments only."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Alianza Meridian Corp"}
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/elianjuan-g/hermes-manas-aegis"
+Repository = "https://github.com/elianjuan-g/hermes-manas-aegis"
+
+# CIEL build fix (2026-11-08): explicit package list so setuptools does not
+# mistake the live plugin dir (desktop/, honeypot_sandbox/) for packages.
+# Code is byte-identical to the v2.2.0 submission zip; only build config.
+[tool.setuptools]
+packages = ["hermes_manas_aegis"]

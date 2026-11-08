@@ -1,0 +1,59 @@
+name: hermes-manas-aegis
+version: 2.3.0
+description: "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks that can block or rewrite some risky tool arguments, with local telemetry and a loopback HUD. Opt-in, test environments only — see README.md for limits."
+author: "Alianza Meridian Corp"
+license: "MIT"
+homepage: "https://github.com/elianjuan-g/hermes-manas-aegis"
+repository: "https://github.com/elianjuan-g/hermes-manas-aegis"
+entrypoint: "hermes_manas_aegis:register"
+min_hermes_version: "0.21.0"
+categories:
+  - security
+  - guardrails
+  - desktop
+  - monitoring
+tags:
+  - guardrail
+  - pattern-matching
+  - honeypot-decoy
+  - mitre-attack
+  - stix-local
+  - desktop-ui
+
+provides:
+  hooks:
+    - on_session_start
+    - pre_llm_call
+    - pre_tool_call
+    - transform_tool_result
+    - transform_llm_output
+  tools:
+    - manas_tactical_core
+    - manas_stix_intelligence
+  commands:
+    - /manas-hud
+    - /manas-barrage
+    - /manas-stix
+
+config_schema:
+  tactical_doctrine:
+    type: string
+    default: "counter_deceive"
+    enum: ["counter_deceive", "ssvc_enforce", "stealth_audit"]
+    description: "counter_deceive redirects credential reads to Canary Honeypot decoys; ssvc_enforce and stealth_audit have no behaviour in code — they are only enum values, with no SSVC gate anywhere. The only doctrine branch is 'counter_deceive' (credential reads are redirected); any other doctrine falls through to HARD_BLOCK for credential reads. Doctrine only changes credential-read behaviour; it does not hard-block all ACT/ATTEND decisions."
+  auto_launch_hud_server:
+    type: boolean
+    default: true
+    description: "Start local Analytical Matrix UI server on 127.0.0.1:18777 for Hermes Desktop & Browser telemetry."
+  hud_port:
+    type: integer
+    default: 18777
+    description: "Local port for the live Analytical Core UI."
+  git_rce_synthesis:
+    type: boolean
+    default: true
+    description: "Automatically rewrite git commands with safe flags to neutralize malicious repository config hooks (CWE-78)."
+  ssrf_dns_firewall:
+    type: boolean
+    default: true
+    description: "Pre-resolve DNS and block RFC1918, loopback, and cloud metadata SSRF (CWE-918)."

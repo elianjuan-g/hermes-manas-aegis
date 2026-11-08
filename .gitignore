@@ -1,0 +1,17 @@
+# Runtime state (generated when the plugin runs - never commit)
+manas_telemetry.json
+stix21_taxii_feed.json
+dashboard.html
+__pycache__/
+*.egg-info/
+*.pyc
+
+# Secrets — NEVER commit real credentials (plugin is open source)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json

@@ -1,0 +1,5 @@
+{
+  "provider": "nous-hermes-canary-trap",
+  "api_key": "sk-CANARY-TRAP-9948102948102948102948-DECOY",
+  "honeypot_notice": "TRACE_ID_MANAS_CORE_ACTIVE_COUNTERMEASURE"
+}
