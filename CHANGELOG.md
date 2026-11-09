@@ -5,6 +5,101 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.6.0-alpha] — 2026-11-09
+
+Revisi R3 (atas perintah MyLord: "Gimana skor nya dibuat 10 semuanya"
++ "aku butuh guard terbaik diantara mereka semua"). Sepuluh fitur
+untuk menutup celah enforcement yang dibuktikan oleh verdict REVISI.txt
+dan riset kompetitor (llm-antidote ~82, blackbox ~78). Dimensi maturity
+tetap jujur di 7–8: PR katalog #151504 harus di-merge Nous + pengguna
+nyata dulu — itu di luar kendali kode.
+
+### Ditambahkan
+
+- **Taint tracking (per sesi).** Akses berkas kredensial (deceived ke
+  honeypot atau diblokir) menandai sesi sebagai tainted (TTL 60 menit,
+  hanya di memori); egress berikutnya dari sesi yang sama di-hard-block
+  (MANAS-CRED-HONEYPOT). Simulasi tidak menandai taint.
+- **Parser shell nyata** menggantikan regex untuk perintah berantai:
+  pemisah `;` `&&` `||` `|` `&` (hormat quote + escape); tiap segmen
+  diperiksa sendiri — `python -c` berbahaya diblokir per segmen,
+  subcommand git ditulis ulang per segmen.
+- **SSRF fail-closed + allowlist.** DNS yang gagal kini memblokir
+  (dulu: dianggap SAFE). `ssrf_allowlist` di konfigurasi mengecualikan
+  host bernama.
+- **MANAS-SYMLINK-GUARD enforced.** Argumen dikanonikalisasi
+  (`Path.resolve`); baca yang mengarah ke berkas terlindungi
+  dialihkan ke decoy honeypot. Status planned → experimental.
+- **MANAS-CALLID-RACE enforced.** Pemanggilan runtime identik
+  (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block.
+  Status planned → experimental. Jendela bisa dikonfigurasi
+  (`callid_race_window_s`). Simulasi dikecualikan.
+- **Posture Score (0–100 + grade A–F)** di HUD: aturan 25 +
+  enforcement 25 + hygiene 20 + intelijen 15 + aktivitas 15.
+- **Guard Arena.** 10 skenario serangan (teks saja, tidak dieksekusi)
+  dijalankan pada core sekali pakai lewat jalur enforcement runtime;
+  hasil tersimpan (`arena_last.json`) dan tampil di tab Arena.
+- **Audit time-travel.** Pemeriksaan ulang event runtime tersimpan:
+  event yang baru akan tertangkap oleh mekanisme R3 ditandai
+  "newly caught". Audit berbasis pola atas evidence tersimpan
+  (bukan replay penuh — telemetri tidak menyimpan event "allow").
+- **Pengamanan HUD.** CSRF token di semua POST (header
+  `X-CSRF-Token`); rate limit 20 POST/IP/60 detik (HTTP 429);
+  token auth opt-in (`hud_auth_token`) + halaman login + cookie
+  sesi HttpOnly 24 jam (default mati — HUD loopback-only di iframe
+  Desktop).
+- **CI + contract test + coverage gate.** `.github/workflows/ci.yml`
+  (Python 3.11/3.12): unit + contract test, coverage gate 70%
+  (terukur 79% di v2.6.0). `tests/test_contract.py`: versi
+  plugin.yaml == pyproject == codename, field katalog wajib,
+  `register()` mendaftarkan semua hook + tool yang dideklarasikan,
+  HUD render, konstanta hardening, nol dependensi non-stdlib.
+
+### Diubah
+
+- **Ke-10 aturan kini experimental** (tidak ada lagi planned).
+  `rules_enforced` di posture: 8 → 10.
+- **i18n: 159 → 180 kunci** per bahasa (21 kunci baru: posture 6 +
+  arena 11 + time-travel 4), 15 bahasa lengkap, 0 mismatch.
+- **Penjelasan aturan (RULE_EXPLAIN)** untuk SYMLINK-GUARD,
+  CALLID-RACE, dan SHELL-RCE diperbarui ke status enforcement R3.
+- **README:** tabel bypass diperbarui (git chaining, `python -c`,
+  SSRF fail-open, symlink — semua sudah diperbaiki); seksi baru
+  Skor postur / Arena / time-travel / pengamanan HUD.
+
+### Diperbaiki
+
+- **Sub-jumlah simulasi** kini memakai pencocokan substring yang
+  sama dengan ringkasan (sudah benar sejak R2.5.1; tes R3 mengunci
+  nilai (4, 2, 1) = 7 event dari 6 input barrage).
+- **`get_last_simulation()`** tidak lagi memotong run di 6 event —
+  satu input bisa menghasilkan beberapa event (vektor git kini
+  menghasilkan 2 modify).
+
+### Tes
+
+- **Unit + contract: 61/61 lulus** — 38 lama + 16 baru R3 (taint,
+  parser shell, SSRF fail-closed + allowlist, symlink, call-ID race,
+  posture score, arena 10/10, time-travel, CSRF/posture/arena di
+  HUD, key count 180) + 7 tes kontrak.
+- **E2E HTTP nyata: 26/26 lulus** (`/tmp/e2e-r3.py`): CSRF 403/200,
+  arena 10/10, time-travel, barrage 6 hasil, rate limit 429 di POST
+  ke-21, token auth (login 401/302 + cookie sesi + HUD 200).
+- **Cakupan: 79%** (core 80%, i18n 100%, threat_intel 86%).
+
+### Catatan jujur
+
+- **Maturity tetap 7–8, bukan 10.** PR katalog harus di-merge dan
+  pengguna nyata harus memakai plugin ini dulu.
+- **Packaging (wheel/sdist membawa plugin.yaml + aset desktop)**
+  masih terbuka dari Fase R2 — belum masuk 10 fitur R3.
+- **Arena skenario `arena-ssrf-dns-fail` dihapus** dari 10 skenario
+  (tidak deterministik: DNS di VM selalu ter-resolve lewat proxy
+  egress ke 198.18.x.x); fail-closed diuji oleh unit test dengan
+  `socket.getaddrinfo` yang di-mock.
+- **Terjemahan 21 kunci baru × 13 bahasa non-en/id** ditulis Ciel
+  (bukan penutur asli) — pola yang sama seperti R2.5.2.
+
 ## [2.5.2-alpha] — 2026-11-09
 
 Revisi R2.5.2 (atas laporan MyLord: fitur bahasa bagus tapi tidak

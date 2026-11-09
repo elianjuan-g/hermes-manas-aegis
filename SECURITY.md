@@ -1,6 +1,6 @@
 # Keamanan — Cara Melaporkan Celah (SECURITY.md)
 
-Manas Aegis masih **ALPHA / prototipe** (v2.5.2-alpha). Laporan celah
+Manas Aegis masih **ALPHA / prototipe** (v2.6.0-alpha). Laporan celah
 sangat membantu — tapi mohon laporkan dengan cara yang aman.
 
 ## Cara melaporkan

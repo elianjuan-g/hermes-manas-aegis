@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.5.2-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.6.0-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -13,6 +13,7 @@ payloads are introduced.
 import base64
 import json
 import os
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -107,13 +108,19 @@ class TestManasAegisR1(unittest.TestCase):
         self.assertEqual(stats["hard_blocked"], 1)
 
     def test_planned_rules_have_no_enforcement(self) -> None:
-        self.assertEqual(THREAT_MATRIX["MANAS-SYMLINK-GUARD"].status, "planned")
-        self.assertEqual(THREAT_MATRIX["MANAS-CALLID-RACE"].status, "planned")
+        # R3 (v2.6.0-alpha): the two planned rules are now enforced —
+        # SYMLINK-GUARD via path canonicalization, CALLID-RACE via the
+        # duplicate-call shield — so NO planned rules remain. The test
+        # now asserts the new reality: 10/10 enforced.
+        self.assertEqual(THREAT_MATRIX["MANAS-SYMLINK-GUARD"].status, "experimental")
+        self.assertEqual(THREAT_MATRIX["MANAS-CALLID-RACE"].status, "experimental")
+        planned = [k for k, v in THREAT_MATRIX.items() if v.status == "planned"]
+        self.assertEqual(planned, [])
         experimental = [k for k, v in THREAT_MATRIX.items() if v.status == "experimental"]
-        self.assertEqual(len(experimental), 8)
+        self.assertEqual(len(experimental), 10)
         posture = self.core.get_system_posture()
         self.assertEqual(posture["rules_defined"], 10)
-        self.assertEqual(posture["rules_enforced"], 8)
+        self.assertEqual(posture["rules_enforced"], 10)
         self.assertTrue(posture.get("alpha"))
 
     def test_hud_empty_state_on_fresh_core(self) -> None:
@@ -167,7 +174,7 @@ class TestManasAegisR2(unittest.TestCase):
 
         self.assertEqual(DEFAULT_LANG, "en")
         en_keys = sorted(LANGS["en"])
-        self.assertEqual(len(en_keys), 159)
+        self.assertEqual(len(en_keys), 180)
         for code, _name in SUPPORTED_LANGS:
             self.assertEqual(sorted(LANGS[code]), en_keys, code)
         hud_en = build_analytical_hud_html(self.core)
@@ -480,7 +487,7 @@ class TestManasAegisR25(unittest.TestCase):
 
     def test_theme_keys_in_all_languages(self):
         en_keys = set(LANGS["en"])
-        self.assertEqual(len(en_keys), 159)
+        self.assertEqual(len(en_keys), 180)
         for code, d in LANGS.items():
             self.assertEqual(set(d), en_keys, f"key mismatch in {code}")
             self.assertIn("theme_dark", d)
@@ -608,7 +615,13 @@ class TestManasAegisR251(unittest.TestCase):
         self.assertGreater(blocked, 0, "blocked subcount must be > 0 after a barrage")
         self.assertGreater(modified, 0, "modified subcount must be > 0 after a barrage")
         self.assertGreater(deceived, 0, "deceived subcount must be > 0 after a barrage")
-        self.assertEqual(blocked + modified + deceived, 6)
+        # R3: the barrage is still 6 vectors, but the first vector
+        # ("git status && git log") now rewrites EACH git segment, so
+        # it yields 2 modify events instead of 1: blocked=4 (SSRF,
+        # SQLi, memory-write RCE match, webhook), modified=2 (the two
+        # git rewrites), deceived=1 (honeypot). Total 7, not 6.
+        self.assertEqual((blocked, modified, deceived), (4, 2, 1))
+        self.assertEqual(blocked + modified + deceived, 7)
 
     def test_sim_subcounts_match_my_lord_telemetry(self):
         # Reproduce the exact telemetry MyLord screenshotted: 12 sim
@@ -701,13 +714,13 @@ class TestManasAegisR252(unittest.TestCase):
         self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
 
     def test_i18n_key_count(self):
-        # 115 (v2.5.0) + 41 scan/check/file/intel keys + 3 NVD severity words.
+        # 159 (v2.5.2) + 21 R3 keys (posture 6 + arena 11 + time-travel 4).
         from hermes_manas_aegis.i18n import LANGS
 
         en = LANGS["en"]
-        self.assertEqual(len(en), 159)
+        self.assertEqual(len(en), 180)
         for code in LANGS:
-            self.assertEqual(len(LANGS[code]), 159, f"{code} key count differs")
+            self.assertEqual(len(LANGS[code]), 180, f"{code} key count differs")
 
     def test_scan_findings_render_fully_translated(self):
         # A fresh scan produces key-based findings; the HUD renders
@@ -793,6 +806,185 @@ class TestManasAegisR252(unittest.TestCase):
             self.assertIn("detail_key", f)
             self.assertIn("params", f)
             self.assertTrue(str(f.get("title", "")), "English fallback title missing")
+
+
+
+class TestManasAegisR3(unittest.TestCase):
+    """R3 (v2.6.0-alpha): taint tracking, shell parser, SSRF fail-closed,
+    symlink + call-ID guards enforced, Posture Score, Guard Arena,
+    time-travel audit, HUD CSRF/rate-limit/auth, new i18n keys."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.environ["HOME"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "HOME", None)
+        self.core = ManasAegisCore(state_dir=Path(self.tmp.name) / "state")
+
+    def test_taint_blocks_egress_after_credential_read(self) -> None:
+        # A credential read (deceived to the honeypot) taints the
+        # session; a later egress in the same session is blocked.
+        r1 = self.core.intercept_tool_call(
+            "read_file", {"path": ".hermes/auth.json"}, "s-taint", event_source="runtime"
+        )
+        self.assertEqual(r1.get("action"), "modify")
+        self.assertTrue(self.core._is_tainted("s-taint"))
+        r2 = self.core.intercept_tool_call(
+            "send_message", {"text": "exfiltrated data"}, "s-taint", event_source="runtime"
+        )
+        self.assertEqual(r2.get("action"), "block")
+        self.assertIn("Tainted", r2.get("message", ""))
+        # A different session without a credential read may egress.
+        r3 = self.core.intercept_tool_call(
+            "send_message", {"text": "hello"}, "s-clean", event_source="runtime"
+        )
+        self.assertEqual(r3, {})
+
+    def test_taint_expires(self) -> None:
+        self.core.intercept_tool_call(
+            "read_file", {"path": ".hermes/auth.json"}, "s-exp", event_source="runtime"
+        )
+        self.assertTrue(self.core._is_tainted("s-exp"))
+        # Age the taint entry past the TTL (white-box, deterministic).
+        self.core._taint["s-exp"]["since"] -= self.core._taint_ttl_s() + 1
+        self.assertFalse(self.core._is_tainted("s-exp"))
+        r = self.core.intercept_tool_call(
+            "send_message", {"text": "hello"}, "s-exp", event_source="runtime"
+        )
+        self.assertEqual(r, {})
+
+    def test_simulation_does_not_set_taint(self) -> None:
+        self.core.intercept_tool_call(
+            "read_file", {"path": ".hermes/auth.json"}, "s-sim", event_source="simulation"
+        )
+        self.assertFalse(self.core._is_tainted("s-sim"))
+        r = self.core.intercept_tool_call(
+            "send_message", {"text": "hello"}, "s-sim", event_source="simulation"
+        )
+        self.assertEqual(r, {})
+
+    def test_shell_parser_blocks_chained_python_c(self) -> None:
+        r = self.core.intercept_tool_call(
+            "terminal",
+            {"command": "git status; python3 -c \"import os; os.system('id')\""},
+            "s-shell",
+            event_source="runtime",
+        )
+        self.assertEqual(r.get("action"), "block")
+        self.assertIn("python -c", r.get("message", ""))
+
+    def test_shell_parser_rewrites_each_git_segment(self) -> None:
+        r = self.core.intercept_tool_call(
+            "terminal", {"command": "git status && git log -n 1"}, "s-git", event_source="runtime"
+        )
+        self.assertEqual(r.get("action"), "modify")
+        new_cmd = str(r["args"]["command"])
+        # Both git invocations carry the safe prefix (count == 2).
+        self.assertEqual(new_cmd.count("core.fsmonitor=false"), 2)
+
+    def test_shell_parser_quoted_separator_not_split(self) -> None:
+        r = self.core.intercept_tool_call(
+            "terminal", {"command": "git log --pretty='a;b'"}, "s-q", event_source="runtime"
+        )
+        self.assertEqual(r.get("action"), "modify")
+        # One git segment only: exactly one safe prefix, no false block.
+        self.assertEqual(str(r["args"]["command"]).count("core.fsmonitor=false"), 1)
+
+    def test_python_c_benign_allowed(self) -> None:
+        r = self.core.intercept_tool_call(
+            "terminal", {"command": "python3 -c \"print(1+1)\""}, "s-py", event_source="runtime"
+        )
+        self.assertEqual(r, {})
+
+    def test_ssrf_fail_closed_on_dns_error(self) -> None:
+        from unittest import mock
+
+        with mock.patch("socket.getaddrinfo", side_effect=socket.gaierror("Name or service not known")):
+            ok, reason = self.core.evaluate_ssrf_target("https://nonexistent.invalid/x")
+            self.assertFalse(ok)
+            self.assertIn("fail-closed", reason)
+            r = self.core.intercept_tool_call(
+                "browser_snapshot", {"url": "https://nonexistent.invalid/x"}, "s-dns", event_source="runtime"
+            )
+            self.assertEqual(r.get("action"), "block")
+
+    def test_ssrf_allowlist(self) -> None:
+        core2 = ManasAegisCore(
+            state_dir=Path(self.tmp.name) / "state2",
+            config={"ssrf_allowlist": ["trusted.internal"]},
+        )
+        ok, reason = core2.evaluate_ssrf_target("https://trusted.internal/x")
+        self.assertTrue(ok)
+        self.assertEqual(reason, "ALLOWLISTED")
+
+    def test_symlink_guard_redirects(self) -> None:
+        link = Path(self.tmp.name) / "evil-link"
+        link.symlink_to(Path.home() / ".hermes" / "auth.json")
+        r = self.core.intercept_tool_call(
+            "read_file", {"path": str(link)}, "s-link", event_source="runtime"
+        )
+        self.assertEqual(r.get("action"), "modify")
+        # The rule that fired is SYMLINK-GUARD, not CRED-HONEYPOT.
+        self.assertEqual(self.core.events[-1]["rule_id"], "MANAS-SYMLINK-GUARD")
+        self.assertIn("decoy", str(r["args"]["path"]))
+
+    def test_callid_race_blocks_duplicate(self) -> None:
+        args = {"command": "git status"}
+        r1 = self.core.intercept_tool_call("terminal", dict(args), "s-dup", event_source="runtime")
+        self.assertEqual(r1.get("action"), "modify")
+        r2 = self.core.intercept_tool_call("terminal", dict(args), "s-dup", event_source="runtime")
+        self.assertEqual(r2.get("action"), "block")
+        self.assertEqual(self.core.events[-1]["rule_id"], "MANAS-CALLID-RACE")
+        # Different args pass; simulation duplicates are exempt.
+        r3 = self.core.intercept_tool_call("terminal", {"command": "git log"}, "s-dup", event_source="runtime")
+        self.assertEqual(r3.get("action"), "modify")
+        self.core.intercept_tool_call("terminal", dict(args), "s-sim2", event_source="simulation")
+        r4 = self.core.intercept_tool_call("terminal", dict(args), "s-sim2", event_source="simulation")
+        self.assertNotEqual(r4.get("action"), "block")
+
+    def test_posture_score_fresh_core(self) -> None:
+        ps = self.core.compute_posture_score()
+        self.assertEqual(ps["components"], {"rules": 25, "enforcement": 25, "hygiene": 20, "intel": 0, "activity": 0})
+        self.assertEqual(ps["score"], 70)
+        self.assertEqual(ps["grade"], "C")
+
+    def test_arena_all_pass(self) -> None:
+        arena = self.core.run_arena()
+        self.assertEqual(arena["total"], 10)
+        self.assertEqual(arena["passed"], 10)
+        self.assertEqual(arena["failed"], 0)
+        for res in arena["results"]:
+            self.assertTrue(res["passed"], f"arena scenario failed: {res['id']}")
+
+    def test_time_travel_audit_flags_new_rules(self) -> None:
+        # Log an event under an OLD rule whose evidence contains a
+        # python -c payload: the current rules would catch it with the
+        # new python-c check, so the audit must flag it newly caught.
+        spec = THREAT_MATRIX["MANAS-GIT-FS-RCE"]
+        self.core._log_stix_event(
+            spec, "s-tt", "terminal", "python3 -c \"import os; os.system('id')\"",
+            1.35, 50, "A", "SYNTHESIZED_PATCH (Modify Args)", source="runtime",
+        )
+        audit = self.core.run_time_travel_audit()
+        self.assertEqual(audit["total"], 1)
+        self.assertEqual(audit["newly_caught"], 1)
+        self.assertIn("MANAS-SHELL-RCE:python-c", audit["results"][0]["new_hits"])
+
+    def test_hud_has_csrf_posture_and_arena(self) -> None:
+        h = build_analytical_hud_html(self.core, lang="en")
+        self.assertIn('name="csrf-token"', h)
+        self.assertIn("Posture score", h)
+        self.assertIn('id="tab-arena"', h)
+        self.assertIn("Guard Arena", h)
+        self.assertIn("Time-travel audit", h)
+        h_id = build_analytical_hud_html(self.core, lang="id")
+        self.assertIn("Skor postur", h_id)
+        self.assertIn("Arena Penjaga", h_id)
+
+    def test_i18n_key_count_r3(self) -> None:
+        self.assertEqual(len(LANGS["en"]), 180)
+        for code in LANGS:
+            self.assertEqual(len(LANGS[code]), 180, f"{code} key count differs")
 
 
 if __name__ == "__main__":

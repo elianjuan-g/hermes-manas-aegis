@@ -1,6 +1,6 @@
 # Manas Aegis — Plugin Guardrail untuk Hermes Agent
 
-> **⚠️ ALPHA / PROTOTIPE — v2.5.2-alpha**
+> **⚠️ ALPHA / PROTOTIPE — v2.6.0-alpha**
 >
 > Plugin ini masih **prototipe eksperimental**. Pasang hanya kalau Anda
 > memilih ikut mencoba (**opt-in**), dan hanya di **lingkungan uji
@@ -73,7 +73,8 @@ tabel aturan di bawah.
 Panel "Yang dipantau" di HUD merangkum cakupan plugin ini:
 
 - **Yang dipantau:** sebagian aktivitas tool Hermes Agent yang cocok
-  dengan 8 aturan eksperimental (lihat tabel guard di bawah). Aktivitas
+  dengan 10 aturan eksperimental (lihat tabel guard di bawah — sejak
+  v2.6.0-alpha tidak ada lagi aturan berstatus planned). Aktivitas
   yang tidak cocok dengan pola apa pun tidak dicatat.
 - **Yang tidak dipindai:** plugin ini TIDAK memindai seluruh komputer,
   semua aplikasi, atau seluruh kerentanan pada perangkat. Bukan
@@ -142,20 +143,21 @@ Status:
   punya celah yang diketahui. Jangan diandalkan sebagai pengaman
   tunggal.
 - **planned** — hanya ada namanya di katalog aturan. **Tidak ada**
-  pemeriksaan yang berjalan di v2.5.2-alpha.
+  pemeriksaan yang berjalan. (Di v2.6.0-alpha: tidak ada lagi aturan
+  berstatus planned — ke-10 aturan enforced.)
 
 | Aturan | Ancaman | Trigger | Tindakan | Status | Batas / bypass yang diketahui | Data yang dicatat |
 |---|---|---|---|---|---|---|
-| MANAS-GIT-FS-RCE | Perintah git yang memanfaatkan konfigurasi repo berbahaya (CWE-78) | Perintah git `status`, `diff`, `log`, `checkout`, `pull`, `fetch`, atau `clone` pada argumen `command`/`cmd`/`script` | modify | experimental | Hanya subcommand di atas yang ditulis ulang, dan hanya kemunculan pertama. **Perintah berantai lolos**, contoh: `git status; touch /tmp/pwned` — bagian kedua tetap berjalan. Bukan parser shell. | Perintah git yang sudah diubah (maks. 110 karakter pertama) |
-| MANAS-CRED-HONEYPOT | Pembacaan file kredensial (CWE-522 / CWE-73) | Argumen berisi path kredensial yang dikenali (mis. `.hermes/auth.json`, `.env`, kunci SSH, `.aws/credentials`) pada operasi baca | modify / block | experimental | Pencocokan substring pada teks argumen saja. **Tanpa canonicalization dan tanpa pemeriksaan symlink** — variasi path/encoding bisa lolos (perbaikan direncanakan di R2). | Path yang cocok dan path decoy tujuan (bila dialihkan) |
-| MANAS-SSRF-SINKHOLE | Permintaan ke alamat internal / metadata cloud (CWE-918) | URL `http(s)://...` di argumen tool yang mengarah ke IP privat, loopback, link-local, reserved, `localhost`, atau host metadata | block | experimental | **DNS yang gagal saat ini dianggap SAFE** — ini keterbatasan yang diketahui dan akan dibuat fail-closed di R2. Hasil cek DNS juga tidak mengikat koneksi berikutnya, dan redirect tidak diperiksa. | URL dan alasan pemblokiran |
+| MANAS-GIT-FS-RCE | Perintah git yang memanfaatkan konfigurasi repo berbahaya (CWE-78) | Perintah git `status`, `diff`, `log`, `checkout`, `pull`, `fetch`, atau `clone` pada argumen `command`/`cmd`/`script` | modify | experimental | Hanya subcommand di atas yang ditulis ulang. Sejak v2.6.0-alpha perintah berantai dipecah per segmen oleh parser shell nyata — tiap segmen diperiksa dan ditulis ulang sendiri. Bukan sandbox shell. | Perintah git yang sudah diubah (maks. 110 karakter pertama) |
+| MANAS-CRED-HONEYPOT | Pembacaan file kredensial (CWE-522 / CWE-73) | Argumen berisi path kredensial yang dikenali (mis. `.hermes/auth.json`, `.env`, kunci SSH, `.aws/credentials`) pada operasi baca | modify / block | experimental | Pencocokan substring pada teks argumen saja, ditambah canonicalization sejak v2.6.0-alpha: symlink di-resolve, dan baca yang mengarah ke berkas terlindungi dialihkan ke decoy (MANAS-SYMLINK-GUARD). Variasi path/encoding lain masih bisa lolos. | Path yang cocok dan path decoy tujuan (bila dialihkan) |
+| MANAS-SSRF-SINKHOLE | Permintaan ke alamat internal / metadata cloud (CWE-918) | URL `http(s)://...` di argumen tool yang mengarah ke IP privat, loopback, link-local, reserved, `localhost`, atau host metadata | block | experimental | **Sejak v2.6.0-alpha DNS yang gagal dianggap TIDAK AMAN (fail-closed)** — permintaan diblokir. Host di `ssrf_allowlist` dikecualikan. Hasil cek DNS juga tidak mengikat koneksi berikutnya, dan redirect tidak diperiksa. | URL dan alasan pemblokiran |
 | MANAS-WEBHOOK-AUTH | Session ID webhook berbentuk aneh (CWE-863) | `session_id` diawali `webhook:` dan berisi lebih dari 2 tanda colon (`:`) | block | experimental | Hanya memeriksa **bentuk** session ID, **bukan autentikasi webhook**. Session ID yang bentuknya normal tapi palsu tidak terdeteksi. | Session ID yang diblokir |
 | MANAS-CONFIG-FIM | Injeksi hook pada konfigurasi (CWE-94) | Pola teks injeksi hook konfigurasi di argumen tool | block | experimental | Hanya memblokir pola teks. Hash konfigurasi kini **dibandingkan ulang** oleh quick scan terhadap baseline persisten (`cce_baseline.json`) — perubahan dilaporkan sebagai temuan. Ini tetap **bukan** FIM sungguhan (tidak ada pemantauan file real-time, dan menghapus `cce_baseline.json` akan membuat baseline baru dari kondisi saat ini). | Potongan argumen (maks. 160 karakter) |
 | MANAS-MEM-FIREWALL | Injeksi directive ke memory (CWE-74) | Pola directive-injection di argumen tool yang namanya mengandung `memory` | modify | experimental | Hanya berlaku untuk tool yang namanya mengandung "memory". Pola di luar itu tidak disentuh. | Catatan bahwa pola dibersihkan dari argumen |
-| MANAS-SYMLINK-GUARD | Serangan symlink / TOCTOU (CWE-59) | — (tidak ada trigger) | — | **planned** | Hanya terdefinisi di katalog aturan. **Tidak ada enforcement di v2.4.0-alpha.** | — |
+| MANAS-SYMLINK-GUARD | Serangan symlink / TOCTOU (CWE-59) | Argumen berisi path yang setelah di-resolve (symlink) mengarah ke berkas kredensial yang dikenali | modify | experimental | Hanya berlaku untuk operasi baca. TOCTOU (symlink diganti setelah cek) tidak dicegah — ini bukan pengunci filesystem. | Path yang cocok dan path decoy tujuan (bila dialihkan) |
 | MANAS-SQLI-AST | Injeksi SQL (CWE-89) | Pola regex injeksi SQL pada argumen tool (teks argumen digabung jadi satu string) | block | experimental | **Bukan parser AST SQL** — hanya pencocokan pola. Pola baru yang belum dikenal bisa lolos; teks normal yang kebetulan mirip pola bisa terblokir. | Potongan argumen (maks. 160 karakter) |
-| MANAS-SHELL-RCE | Perintah shell destruktif (CWE-78) | Pola regex perintah shell destruktif pada argumen tool | block | experimental | Hanya pola yang dikenal. **`python -c` tanpa `socket` + `subprocess` dalam string yang sama lolos dari pola**; perintah berantai juga bisa lolos. Bukan sandbox shell. | Potongan argumen (maks. 160 karakter) |
-| MANAS-CALLID-RACE | Race condition call-ID antar sesi (CWE-362) | — (tidak ada trigger) | — | **planned** | Hanya terdefinisi di katalog aturan. **Tidak ada enforcement di v2.4.0-alpha.** | — |
+| MANAS-SHELL-RCE | Perintah shell destruktif (CWE-78) | Pola regex perintah shell destruktif pada argumen tool | block | experimental | Hanya pola yang dikenal. Sejak v2.6.0-alpha perintah berantai dipecah per segmen dan bentuk `python -c` berbahaya diblokir oleh parser shell per segmen. Bukan sandbox shell. | Potongan argumen (maks. 160 karakter) |
+| MANAS-CALLID-RACE | Race condition call-ID antar sesi (CWE-362) | Pemanggilan tool yang sama (sesi + tool + hash argumen sama) dalam 10 detik | block | experimental | Hanya berlaku untuk pemanggilan runtime; simulasi dikecualikan. Jendela 10 detik bisa dikonfigurasi (`callid_race_window_s`). | Nama tool dan hash argumen |
 
 Catatan tentang angka di tabel dan di HUD: nilai seperti CVSS,
 CWSS, EPSS, dan SSVC adalah **nilai referensi yang ditulis di
@@ -165,6 +167,57 @@ statis yang ditulis langsung di kode** (core_engine.py:297) —
 bukan hasil pemeriksaan atas sekian standar; README lama sendiri
 hanya menyebut sekitar 12 kerangka bernama. Angka itu tidak dipakai
 lagi di dokumen ini.
+
+## Skor postur, Guard Arena, dan audit time-travel (baru di v2.6.0)
+
+### Skor postur (Posture Score)
+Kartu skor di HUD memberi satu angka 0–100 + grade (A–F) untuk kondisi
+perlindungan saat ini, dari lima komponen:
+- **Aturan (25):** jumlah aturan enforced / aturan terdefinisi.
+- **Enforcement (25):** dikurangi 5 per temuan scan kritis, dan 10 bila
+  SSRF firewall dimatikan.
+- **Hygiene (20):** dikurangi 10 bila ada error aturan khusus, dan 10
+  bila ada temuan kritis integritas konfigurasi.
+- **Intelijen (15):** 15 bila cache intelijen segar, 7 bila basi, 0 bila
+  belum pernah diambil.
+- **Aktivitas (15):** 15 bila ada event/pindai dalam 24 jam terakhir,
+  7 bila pernah ada aktivitas, 0 bila belum ada sama sekali.
+
+Skor ini adalah **ringkasan kondisi lokal**, bukan sertifikat keamanan.
+Skor 100 tidak berarti komputer Anda aman — hanya berarti kondisi yang
+plugin ini ukur sedang baik.
+
+### Guard Arena
+Tab **Arena** di HUD menjalankan 10 skenario serangan (hanya teks,
+tidak pernah dieksekusi) melawan jalur enforcement yang sama dengan
+runtime — pada core sekali pakai, jadi tidak mengotori telemetri Anda.
+Hasilnya tersimpan (`arena_last.json`) dan tampil sebagai tabel
+skenario / yang diharapkan / hasil / PASS–FAIL. Tombol **Run Arena**
+menjalankan ulang kesepuluh skenario. Arena membuktikan aturan
+benar-benar bekerja, bukan sekadar terdaftar di katalog.
+
+### Audit time-travel (Time-travel audit)
+Tombol **Run Time-travel audit** memeriksa ulang event runtime yang
+sudah tersimpan, dan menandai event yang **baru akan tertangkap**
+oleh mekanisme R3 (parser `python -c`, symlink guard, SSRF
+fail-closed) padahal aturan lamanya tidak menangkapnya. Ini audit
+**berbasis pola atas evidence yang tersimpan** — bukan replay penuh
+(telemetri tidak menyimpan event "allow" dan evidence terpotong /
+direduksi), jadi hasilnya adalah perkiraan jujur, bukan bukti mutlak.
+Call-ID race tidak dinilai oleh audit ini (tidak bisa dinilai dari
+satu event saja).
+
+### Pengamanan HUD (baru di v2.6.0)
+- **CSRF token** aktif di semua POST (token per-proses, dikirim lewat
+  header `X-CSRF-Token`).
+- **Rate limit:** maks. 20 POST per IP per 60 detik (HTTP 429 bila
+  lewat).
+- **Token auth (opt-in):** set `hud_auth_token` di konfigurasi plugin
+  untuk meminta token sebelum HUD bisa dibuka (halaman login +
+  cookie sesi HttpOnly 24 jam). **Default: mati** — karena HUD
+  loopback-only dan tampil di dalam aplikasi Desktop sebagai iframe,
+  auth bawaan akan memaksa halaman login di dalam aplikasi. Nyalakan
+  bila Anda butuh lapisan tambahan.
 
 ## Pindai: quick scan, full scan, network scan
 
@@ -500,17 +553,17 @@ Yang perlu Anda tahu soal privasi:
 
 - **Hermes 0.21.5 — dites di PC.** `hermes plugins validate`
   lolos sebagian; `hermes plugins doctor` gagal pada kwarg
-  `parameters` (inti hook tetap jalan). Unit test di salinan kerja
-  rev1 ini: **38/38 lulus** (`python3 -m unittest discover`,
-  diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 + 11 tes R2 +
-  5 tes R2.5 + 4 tes R2.5.1 (sub-jumlah simulasi dengan string
-  verdict asli, param tab, redirect pindai) + 5 tes baru R2.5.2
-  (bahasa temuan pindai, migrasi temuan lama, label level intel).
-  E2E HTTP nyata: **32/32 lulus** (`/tmp/e2e-r251.py`).
-  Discovery dari root kini menemukan semua tes (dulu 0 — diperbaiki
-  dengan `tests/__init__.py`). Cakupan tetap sempit: bypass yang
-  diketahui (git chaining, `python -c`, SSRF fail-open) belum
-  diperbaiki — itu Fase R2.
+  `parameters` (inti hook tetap jalan). Unit + contract test di
+  salinan kerja rev1 ini: **61/61 lulus** (`python3 -m unittest
+  discover`, diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 +
+  11 tes R2 + 5 tes R2.5 + 5 tes R2.5.1 + 5 tes R2.5.2 + 16 tes
+  R3 + 7 tes kontrak. E2E HTTP nyata: **26/26 lulus**
+  (`/tmp/e2e-r3.py` — CSRF 403/200, arena 10/10, rate limit 429,
+  token auth 401/302). Cakupan: **79%** (`coverage run`,
+  gate CI 70%). Bypass yang diketahui di v2.5.2 (git chaining,
+  `python -c`, SSRF fail-open) **sudah diperbaiki di v2.6.0**
+  (parser shell, SSRF fail-closed); packaging (wheel/sdist
+  membawa plugin.yaml + aset desktop) masih terbuka.
 - **Hermes 0.23.x — BELUM dites.** Jangan menganggap plugin ini
   sudah terbukti jalan di 0.23.x.
 

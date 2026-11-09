@@ -4,9 +4,12 @@ Hermes Manas-Aegis Plugin Package Entrypoint & Live Analytical Matrix UI Server.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import html
 import json
 import re
+import secrets
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,6 +24,54 @@ from .i18n import DEFAULT_LANG, LANGS, SUPPORTED_LANGS, explain, t
 _CORE: Optional[ManasAegisCore] = None
 _SERVER_STARTED = False
 _SERVER_OK: Optional[bool] = None  # None = belum dicoba, True = bind berhasil, False = bind gagal
+
+# R3 (v2.6.0-alpha): HUD hardening. The server binds loopback only,
+# but a malicious page in the user's browser could still POST to it
+# (CSRF), and a runaway loop could hammer the endpoints. So every
+# POST needs the per-process CSRF token (embedded in the page, sent
+# as X-CSRF-Token) and is rate-limited per client IP. Token auth is
+# opt-in: set config "hud_auth_token" and every request needs a
+# session cookie obtained from /api/login; by default (no token
+# configured) the HUD is open on loopback, as before.
+_CSRF_TOKEN = secrets.token_hex(16)
+_RATE_LIMIT: Dict[str, list] = {}
+_RATE_MAX = 20  # POSTs per window per IP
+_RATE_WINDOW = 60.0  # seconds
+_SESSIONS: Dict[str, float] = {}  # session value -> expiry epoch
+
+
+def _session_for(token: str) -> str:
+    return hashlib.sha256(f"manas-aegis:{token}".encode("utf-8")).hexdigest()
+
+
+def _rate_limited(ip: str) -> bool:
+    now = time.time()
+    hits = [t for t in _RATE_LIMIT.get(ip, []) if now - t < _RATE_WINDOW]
+    if len(hits) >= _RATE_MAX:
+        _RATE_LIMIT[ip] = hits
+        return True
+    hits.append(now)
+    _RATE_LIMIT[ip] = hits
+    return False
+
+
+def _csrf_ok(handler) -> bool:
+    return hmac.compare_digest(handler.headers.get("X-CSRF-Token") or "", _CSRF_TOKEN)
+
+
+def _authed(handler, core) -> bool:
+    token = core.config.get("hud_auth_token")
+    if not token:
+        return True
+    cookie = handler.headers.get("Cookie") or ""
+    for part in cookie.split(";"):
+        part = part.strip()
+        if part.startswith("manas_session="):
+            sess = part.split("=", 1)[1].strip()
+            exp = _SESSIONS.get(sess)
+            if exp and exp > time.time() and hmac.compare_digest(sess, _session_for(str(token))):
+                return True
+    return False
 
 
 def get_core(config: Optional[Dict[str, Any]] = None) -> ManasAegisCore:
@@ -176,6 +227,12 @@ select{background:var(--btn-bg);border:1px solid var(--line);color:var(--txt);pa
 .kpi{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
 .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--acc,var(--info))}
 .kpi .n{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.posture-big{font-size:44px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.posture-big .grade{font-size:22px;color:var(--mut);font-weight:700}
+.bar{display:inline-block;width:140px;height:8px;background:var(--line-soft);border-radius:4px;vertical-align:middle;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--info)}
+.pill-pass{background:rgba(0,215,150,.14);color:var(--low)}
+.pill-fail{background:rgba(245,56,33,.14);color:var(--crit)}
 .kpi .l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin-top:2px}
 .kpi .f{font-size:12px;color:var(--mut2);margin-top:8px}
 .kpi .s{font-size:12px;color:var(--mut);margin-top:2px}
@@ -241,6 +298,7 @@ _SVG_VOLUME = '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 
 _SVG_REFRESH = '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'
 _SVG_SCAN = '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>'
 _SVG_TRASH = '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>'
+_SVG_TARGET = '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'
 _SVG_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'
 _SVG_MOON = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'
 
@@ -327,10 +385,21 @@ def _finding_text(f: Dict[str, Any], lang: str = "en") -> tuple:
 def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> str:
     if lang not in {c for c, _ in SUPPORTED_LANGS}:
         lang = DEFAULT_LANG
-    if active_tab not in ("act", "intel", "find"):
+    if active_tab not in ("act", "intel", "find", "arena"):
         active_tab = "act"
     posture = core.get_system_posture()
     st = posture["stats"]
+    # R3: posture score + last arena / time-travel runs (persisted JSON).
+    pscore = core.compute_posture_score()
+
+    def _load_json(name):
+        try:
+            return json.loads((core.state_dir / name).read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    arena_last = _load_json("arena_last.json")
+    tta_last = _load_json("tta_last.json")
     total = st["total_stored"]
     hist = core.get_history_stats()
     sim = posture.get("last_simulation")
@@ -596,9 +665,76 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
     q_esc = html.escape(query or "")
     clear_q = f"?lang={lang}" if lang != "en" else "/"
 
+    # R3: Posture Score card (big number + grade + component bars).
+    _comp = pscore["components"]
+
+    def _pbar(label, value, maximum):
+        pct = int(round(100.0 * value / maximum)) if maximum else 0
+        return (
+            f'<div class="row"><span class="k">{html.escape(label)}</span>'
+            f'<span><span class="bar"><span style="width:{pct}%"></span></span> '
+            f"{value}/{maximum}</span></div>"
+        )
+
+    posture_html = (
+        f'<div class="card"><h3>{t(lang, "posture_score")}</h3>'
+        f'<div class="posture-big">{pscore["score"]} <span class="grade">{html.escape(pscore["grade"])}</span></div>'
+        + _pbar(t(lang, "posture_rules"), _comp["rules"], 25)
+        + _pbar(t(lang, "posture_enforcement"), _comp["enforcement"], 25)
+        + _pbar(t(lang, "posture_hygiene"), _comp["hygiene"], 20)
+        + _pbar(t(lang, "posture_intel"), _comp["intel"], 15)
+        + _pbar(t(lang, "posture_activity"), _comp["activity"], 15)
+        + "</div>"
+    )
+
+    # R3: Arena panel rows (last persisted run, if any).
+    if arena_last and arena_last.get("results"):
+        _arows = ""
+        for _r in arena_last["results"]:
+            _pill = "pill-pass" if _r.get("passed") else "pill-fail"
+            _plabel = t(lang, "arena_pass") if _r.get("passed") else t(lang, "arena_fail")
+            _arows += (
+                f"<tr><td>{html.escape(str(_r.get('name', '')))}</td>"
+                f"<td>{html.escape(str(_r.get('expect', '')))}</td>"
+                f"<td>{html.escape(str(_r.get('actual', '')))}</td>"
+                f'<td><span class="pill {_pill}">{html.escape(_plabel)}</span></td></tr>'
+            )
+        arena_html = (
+            f'<div class="tablewrap"><table><tr><th>{t(lang, "arena_scenario")}</th>'
+            f"<th>{t(lang, 'arena_expected')}</th><th>{t(lang, 'arena_result')}</th><th></th></tr>"
+            f"{_arows}</table></div>"
+            f'<div class="hist">{html.escape(t(lang, "arena_last", passed=str(arena_last.get("passed", 0)), total=str(arena_last.get("total", 0))))}</div>'
+        )
+    else:
+        arena_html = f'<div class="empty">{t(lang, "arena_none")}</div>'
+
+    # R3: Time-travel audit rows (last persisted run, if any).
+    if tta_last and tta_last.get("results"):
+        _trows = ""
+        for _r in tta_last["results"]:
+            if not _r.get("newly_caught"):
+                continue
+            _trows += (
+                f"<tr><td>{html.escape(str(_r.get('timestamp', '')))}</td>"
+                f"<td>{html.escape(str(_r.get('tool', '')))}</td>"
+                f"<td>{html.escape(str(_r.get('old_rule', '')))}</td>"
+                f"<td>{html.escape(', '.join(_r.get('new_hits') or []))}</td></tr>"
+            )
+        if _trows:
+            tta_html = (
+                f'<div class="tablewrap"><table><tr><th>{t(lang, "col_time")}</th>'
+                f"<th>{t(lang, 'table_source')}</th><th>{t(lang, 'col_rule')}</th>"
+                f"<th>{t(lang, 'tta_new_rule')}</th></tr>{_trows}</table></div>"
+                f'<div class="hist">{html.escape(t(lang, "tta_last", newly=str(tta_last.get("newly_caught", 0)), total=str(tta_last.get("total", 0))))}</div>'
+            )
+        else:
+            tta_html = f'<div class="note">{html.escape(t(lang, "tta_last", newly="0", total=str(tta_last.get("total", 0))))}</div>'
+    else:
+        tta_html = f'<div class="empty">{t(lang, "tta_none")}</div>'
+
     html_out = f"""<!DOCTYPE html>
 <html lang="{lang}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{_CSRF_TOKEN}">
 <title>MANAS AEGIS — {html.escape(t(lang, "title_sub"))}</title>
 <script>try{{var _th=localStorage.getItem('manas-aegis-theme');if(_th==='light'||_th==='dark'){{document.documentElement.setAttribute('data-theme',_th);}}}}catch(e){{}}</script>
 <style>{_HUD_CSS}</style></head>
@@ -613,6 +749,7 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 <button class="tab{" active" if active_tab == "act" else ""}" onclick="showTab('act',this)">{_svg(_SVG_ACTIVITY)}<span>{t(lang, "tab_activity")}</span></button>
 <button class="tab{" active" if active_tab == "intel" else ""}" onclick="showTab('intel',this)">{_svg(_SVG_SHIELD)}<span>{t(lang, "tab_intel")}</span></button>
 <button class="tab{" active" if active_tab == "find" else ""}" onclick="showTab('find',this)">{_svg(_SVG_SEARCH)}<span>{t(lang, "tab_findings")}</span></button>
+<button class="tab{" active" if active_tab == "arena" else ""}" onclick="showTab('arena',this)">{_svg(_SVG_TARGET)}<span>{t(lang, "nav_arena")}</span></button>
 <div class="sidebar-foot">
 <div>{html.escape(str(posture["codename"]))}</div>
 <div>{html.escape(status_line)}</div>
@@ -659,6 +796,7 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 </div>
 <div class="scanline">{html.escape(scan_line)}</div>
 </div>
+{posture_html}
 <div class="panel{" active" if active_tab == "act" else ""}" id="tab-act">
 <form class="search" method="get" action="">
 <input type="hidden" name="lang" value="{lang}">
@@ -685,10 +823,19 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 <div class="panel{" active" if active_tab == "find" else ""}" id="tab-find">
 {f'<div class="tablewrap"><table><tr><th>{t(lang, "findings_time")}</th><th>{t(lang, "findings_check")}</th><th>{t(lang, "findings_severity")}</th><th>{t(lang, "findings_detail")}</th><th>{t(lang, "findings_file")}</th></tr>{find_rows}</table></div>' if find_rows else f'<div class="empty">{t(lang, "findings_empty")}</div>'}
 </div>
+<div class="panel{" active" if active_tab == "arena" else ""}" id="tab-arena">
+<h3 class="section-title">{t(lang, "arena_title")}</h3>
+<div style="margin:10px 0"><button class="btn btn-primary" onclick="runArena()">{_svg(_SVG_TARGET)}<span>{t(lang, "arena_run")}</span></button></div>
+{arena_html}
+<h3 class="section-title">{t(lang, "tta_title")}</h3>
+<div style="margin:10px 0"><button class="btn" onclick="runTimeTravel()">{_svg(_SVG_SEARCH)}<span>{t(lang, "tta_run")}</span></button></div>
+{tta_html}
+</div>
 </main>
 </div>
 <script>
 const I18N = {i18n_js};
+const CSRF = (document.querySelector('meta[name="csrf-token"]') || {{content: ''}}).content;
 const ICON_SUN = `{_svg(_SVG_SUN, 14)}`;
 const ICON_MOON = `{_svg(_SVG_MOON, 14)}`;
 let soundOn = localStorage.getItem('manas-aegis-sound') === '1';
@@ -699,10 +846,12 @@ function toggleTheme(){{const cur = document.documentElement.getAttribute('data-
 (function(){{const saved = localStorage.getItem('manas-aegis-theme'); applyTheme(saved === 'light' ? 'light' : 'dark');}})();
 function showTab(id, el){{document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.getElementById('tab-' + id).classList.add('active'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); el.classList.add('active');}}
 function toggleSound(){{soundOn = !soundOn; localStorage.setItem('manas-aegis-sound', soundOn ? '1' : '0');}}
-async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
-async function clearHistory(){{if(!confirm(I18N.confirm_clear)) return; try{{const r = await fetch('/api/clear-history', {{method: 'POST'}}); const d = await r.json(); if(d.status === 'ok'){{location.reload();}} else {{alert(I18N.alert_clear_fail);}}}} catch(e){{alert(I18N.alert_clear_fail);}}}}
-async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); const u = new URL(location.href); u.searchParams.set('tab', 'find'); u.searchParams.delete('q'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
-async function refreshIntel(){{try{{await fetch('/api/intel-refresh', {{method: 'POST'}}); setTimeout(() => location.reload(), 4000);}} catch(e){{}}}}
+async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
+async function clearHistory(){{if(!confirm(I18N.confirm_clear)) return; try{{const r = await fetch('/api/clear-history', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{location.reload();}} else {{alert(I18N.alert_clear_fail);}}}} catch(e){{alert(I18N.alert_clear_fail);}}}}
+async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json', 'X-CSRF-Token': CSRF}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); const u = new URL(location.href); u.searchParams.set('tab', 'find'); u.searchParams.delete('q'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
+async function refreshIntel(){{try{{await fetch('/api/intel-refresh', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); setTimeout(() => location.reload(), 4000);}} catch(e){{}}}}
+async function runArena(){{try{{const r = await fetch('/api/arena', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{const u = new URL(location.href); u.searchParams.set('tab', 'arena'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
+async function runTimeTravel(){{try{{const r = await fetch('/api/time-travel', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{const u = new URL(location.href); u.searchParams.set('tab', 'arena'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
 </script>
 </body>
 </html>"""
@@ -722,6 +871,21 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         core = get_core()
+        if not _authed(self, core):
+            login_html = (
+                "<!doctype html><html><head><meta charset='utf-8'>"
+                "<title>Manas Aegis — Login</title></head><body>"
+                "<h1>Manas Aegis</h1>"
+                "<p>This HUD is protected. Enter the HUD token to continue.</p>"
+                "<form method='POST' action='/api/login'>"
+                "<input type='password' name='token' autocomplete='off' />"
+                "<button type='submit'>Login</button></form></body></html>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(login_html)
+            return
         # Re-read on-disk state so events/findings written by other
         # processes (a live Hermes agent, another session's scan) show
         # up without a server restart.
@@ -773,6 +937,67 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         core = get_core()
+        ip = self.client_address[0] if self.client_address else "unknown"
+        if self.path != "/api/login" and _rate_limited(ip):
+            payload = json.dumps({"status": "error", "error": "rate_limited"}).encode("utf-8")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Retry-After", "60")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/api/login":
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length).decode("utf-8") if length else ""
+            qs = parse_qs(body)
+            submitted = (qs.get("token", [""])[0] or "").strip()
+            want = str(core.config.get("hud_auth_token") or "")
+            if want and hmac.compare_digest(submitted, want):
+                sess = _session_for(want)
+                _SESSIONS[sess] = time.time() + 24 * 3600
+                self.send_response(302)
+                self.send_header("Set-Cookie", f"manas_session={sess}; HttpOnly; Path=/; Max-Age=86400")
+                self.send_header("Location", "/")
+                self.end_headers()
+                return
+            payload = json.dumps({"status": "error", "error": "bad_token"}).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if not _authed(self, core):
+            payload = json.dumps({"status": "error", "error": "unauthorized"}).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if not _csrf_ok(self):
+            payload = json.dumps({"status": "error", "error": "bad_csrf_token"}).encode("utf-8")
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/api/arena":
+            result = core.run_arena()
+            write_hud_snapshot(core)
+            payload = json.dumps({"status": "ok", "arena": result}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/api/time-travel":
+            result = core.run_time_travel_audit()
+            write_hud_snapshot(core)
+            payload = json.dumps({"status": "ok", "audit": result}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if self.path == "/api/barrage":
             results = core.execute_barrage_simulation()
             write_hud_snapshot(core)
