@@ -15,4 +15,3 @@ __pycache__/
 *.p12
 credentials.json
 secrets.json
-.coverage

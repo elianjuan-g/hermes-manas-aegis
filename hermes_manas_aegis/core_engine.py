@@ -1,5 +1,5 @@
 """
-Hermes Manas-Aegis Core Engine (v2.6.1-alpha Catalog-Validated Edition).
+Hermes Manas-Aegis Core Engine (v2.6.2-alpha Catalog-Validated Edition).
 Implements verifiable CWE, CAPEC, MITRE ATT&CK / ATLAS, OWASP Top 10,
 CVSS v3.1, CWSS, EPSS, CASS, CISA SSVC, and OASIS STIX 2.1 telemetry.
 All signature patterns are RFC4648 Base64-encoded at rest to prevent static scanner false positives.
@@ -15,6 +15,7 @@ import math
 import os
 import platform
 import re
+import shlex
 import socket
 import threading
 import time
@@ -200,7 +201,7 @@ THREAT_MATRIX: Dict[str, ThreatVectorSpec] = {
         epss_prob=0.060,
         maturity="POC",
         vector="AV:N",
-        strategy="SYNTHESIZE_PATCH",
+        strategy="HARD_BLOCK",
         status="experimental",
     ),
 }
@@ -303,7 +304,7 @@ class ManasAegisCore:
     ]
 
     SQLI_PATTERN = re.compile(_d('KD9pKSg/OlxiVU5JT05ccysoPzpBTExccyspP1NFTEVDVFxifFxiT1JccytbJ1wiXT8xWydcIl0/XHMqPVxzKlsnXCJdPzFcYnw7XHMqKD86RFJPUHxBTFRFUnxUUlVOQ0FURXxBVFRBQ0gpXHMrKD86VEFCTEV8REFUQUJBU0UpXGJ8XGJMT0FEX0VYVEVOU0lPTlxzKlwoKQ=='))
-    RCE_PATTERN = re.compile(_d('KD9pKSg/OlxiKD86YmFzaHxzaHx6c2h8bmN8bmNhdClccystaVxzKz4mXHMqL2Rldi90Y3AvfFxiKD86Y3VybHx3Z2V0KVxiW158O10qXHxccyooPzpiYSk/c2hcYnxcYnB5dGhvbjM/XHMrLWNccytbJ1wiXS4qP1xic29ja2V0XGIuKj9cYnN1YnByb2Nlc3NcYnxcYnJtXHMrLXJmXHMrLyg/OlxzfCR8XCopKQ=='))
+    RCE_PATTERN = re.compile(_d('KD9pKSg/OlxiKD86YmFzaHxzaHx6c2h8bmN8bmNhdClccystaVxzKz4mXHMqL2Rldi90Y3AvfFxiKD86Y3VybHx3Z2V0KVxiW158O10qXHxccyooPzpiYSk/c2hcYnxcYnB5dGhvbjM/XHMrLWNccytbJ1wiXS4qP1xic29ja2V0XGIuKj9cYnN1YnByb2Nlc3NcYnxcYnJtXHMrKD86LVthLXpBLVpdKnJbYS16QS1aXSpmW2EtekEtWl0qfC1bYS16QS1aXSpmW2EtekEtWl0qclthLXpBLVpdKnwtW2EtekEtWl0qclthLXpBLVpdKlxzKy1bYS16QS1aXSpmW2EtekEtWl0qfC1bYS16QS1aXSpmW2EtekEtWl0qXHMrLVthLXpBLVpdKnJbYS16QS1aXSp8KD86LS1yZWN1cnNpdmVccystLWZvcmNlfC0tZm9yY2VccystLXJlY3Vyc2l2ZSkpKD86XHMrKD86LVthLXpBLVpdK3wtLW5vLXByZXNlcnZlLXJvb3R8LS1yZWN1cnNpdmV8LS1mb3JjZSkpKlxzKy98XGIoPzpldmFsfCg/OmJhKT9zaClcYlxzKyg/OlwkXCh8YClccyooPzpjdXJsfHdnZXQpXGIp'))
     CONFIG_HOOK_POISON = re.compile(_d('KD9pKSg/Omhvb2tzX2F1dG9fYWNjZXB0XHMqOlxzKnRydWV8cG9zdF9sbG1fY2FsbFxzKjp8cHJlX3Rvb2xfY2FsbFxzKjop'))
     MEMORY_DIRECTIVE_POISON = re.compile(_d('KD9pKSg/Omlnbm9yZVxzK2FsbFxzK3ByZXZpb3VzXHMraW5zdHJ1Y3Rpb25zfHN5c3RlbVxzK3Byb21wdFxzK292ZXJyaWRlfGRpc3JlZ2FyZFxzK3NlY3VyaXR5XHMrZ3VhcmR8W1x1MjAwYi1cdTIwMGZcdTIwMmEtXHUyMDJlXHUyMDYwLVx1MjA2NFx1ZmVmZl17Mix9KQ=='))
     XSS_PATTERN = re.compile(_d('KD9pKSg/OjxzY3JpcHRcYltePl0qPi4qPzwvc2NyaXB0PnxcYm9uKD86ZXJyb3J8bG9hZHxtb3VzZW92ZXIpXHMqPVxzKlsnXCJdW14nXCJdK1snXCJdKQ=='))
@@ -361,9 +362,21 @@ class ManasAegisCore:
         self._taint[session_id] = {"since": time.time(), "source": source}
 
     def _is_egress_tool(self, tool_name: str, args: Dict[str, Any]) -> bool:
-        """True when the call can move data off the machine."""
+        """True when the call can move data off the machine.
+
+        v2.6.2 (P1c): file-transfer / remote-shell / DNS tools join
+        the egress set — scp, rsync, ssh, nc/ncat, dig, nslookup,
+        sftp, ftp. Short names are matched as whole tokens only, so a
+        tool literally named "sync" is not flagged by the "nc"
+        substring.
+        """
         name = tool_name.lower()
         if any(k in name for k in ("http", "request", "fetch", "curl", "wget", "upload", "send", "webhook", "post", "socket", "net")):
+            return True
+        name_tokens = set(re.split(r"[^a-z0-9]+", name))
+        if name_tokens & {"scp", "rsync", "ssh", "nc", "ncat", "dig", "nslookup", "sftp", "ftp", "netcat"}:
+            return True
+        if "rsync" in name or "nslookup" in name or "netcat" in name or "sftp" in name:
             return True
         try:
             text = json.dumps(args, ensure_ascii=False).lower()
@@ -371,11 +384,11 @@ class ManasAegisCore:
             return False
         if "http://" in text or "https://" in text:
             return True
-        if re.search(r"\b(curl|wget)\b", text):
+        if re.search(r"\b(curl|wget|scp|rsync|ssh|nc|ncat|dig|nslookup|sftp|ftp|netcat)\b", text):
             return True
         return False
 
-    _SHELL_SEPARATORS = (";", "&&", "||", "|", "&")
+    _SHELL_SEPARATORS = (";", "&&", "||", "|", "&", "\n")
 
     def _split_shell_commands(self, cmd: str) -> List[str]:
         """Split a shell command on top-level operators.
@@ -383,13 +396,19 @@ class ManasAegisCore:
         Returns parts with the operators kept as separate elements, so
         the caller can judge each segment and rejoin with "".join().
         Quotes (single/double) and backslash escapes are respected, so
-        a ';' inside quotes does not split.
+        a ';' inside quotes does not split. Newlines are separators
+        too, and separators inside $(...) command substitution or
+        `...` backticks do NOT split — the substituted command stays
+        one segment, so a payload such as $(curl ... | sh) cannot
+        fragment past the per-segment checks (v2.6.2).
         """
         parts: List[str] = []
         buf: List[str] = []
         i = 0
         n = len(cmd)
         quote: Optional[str] = None
+        subshell_depth = 0
+        in_backtick = False
         while i < n:
             ch = cmd[i]
             if quote is not None:
@@ -407,6 +426,37 @@ class ManasAegisCore:
                 buf.append(cmd[i:i + 2])
                 i += 2
                 continue
+            if ch == "`":
+                in_backtick = not in_backtick
+                buf.append(ch)
+                i += 1
+                continue
+            if subshell_depth > 0 or in_backtick:
+                # Inside a substitution: track nesting, never split.
+                if ch == "$" and cmd[i + 1:i + 2] == "(":
+                    subshell_depth += 1
+                    buf.append("$(")
+                    i += 2
+                    continue
+                if ch == "(":
+                    subshell_depth += 1
+                    buf.append(ch)
+                    i += 1
+                    continue
+                if ch == ")":
+                    if subshell_depth > 0:
+                        subshell_depth -= 1
+                    buf.append(ch)
+                    i += 1
+                    continue
+                buf.append(ch)
+                i += 1
+                continue
+            if ch == "$" and cmd[i + 1:i + 2] == "(":
+                subshell_depth = 1
+                buf.append("$(")
+                i += 2
+                continue
             two = cmd[i:i + 2]
             if two in ("&&", "||"):
                 parts.append("".join(buf))
@@ -414,7 +464,7 @@ class ManasAegisCore:
                 buf = []
                 i += 2
                 continue
-            if ch in (";", "|", "&"):
+            if ch in (";", "|", "&", "\n"):
                 parts.append("".join(buf))
                 parts.append(ch)
                 buf = []
@@ -429,19 +479,66 @@ class ManasAegisCore:
         "import os", "import sys", "import subprocess", "import socket",
         "os.system", "os.popen", "subprocess", "eval(", "exec(",
         "__import__", "open(",
+        "from os import", "from subprocess import", "import system",
     )
 
     def _python_c_dangerous(self, segment: str) -> bool:
-        """True for `python -c` / `python3 -c` carrying a dangerous call."""
-        if not re.search(r"\bpython[23]?\s+-c\b", segment):
-            return False
-        low = segment.lower()
-        return any(tok in low for tok in self._PY_DANGEROUS)
+        """True for `python -c` / `python3 -c` carrying a dangerous call.
+
+        v2.6.2: the interpreter match is shlex-based, so it also
+        catches versioned binaries (python3.11), absolute paths
+        (/usr/bin/python3) and flags between the interpreter and -c
+        (python3 -u -c, python3 -X utf8 -c). A plain-regex fallback
+        covers segments shlex cannot parse. The code text is
+        whitespace-normalised before the token check, so `import  os`,
+        `os . system` and `from os import system` do not slip past.
+        """
+        code = None
+        try:
+            tokens = shlex.split(segment, posix=True)
+        except ValueError:
+            tokens = []
+        for i, tok in enumerate(tokens):
+            base = tok.rsplit("/", 1)[-1]
+            if not re.fullmatch(r"pythonw?[23]?(?:\.\d+)?", base, re.IGNORECASE):
+                continue
+            # Skip option tokens after the interpreter; -X/-W take a value.
+            j = i + 1
+            while j < len(tokens):
+                t = tokens[j]
+                if t == "--":
+                    break
+                if t == "-c":
+                    code = " ".join(tokens[j + 1:])
+                    break
+                if t.startswith("-") and t != "-":
+                    if t in ("-X", "-W") and j + 1 < len(tokens):
+                        j += 2
+                    else:
+                        j += 1
+                    continue
+                break
+            break
+        if code is None:
+            m = re.search(
+                r"\bpython[23]?(?:\.\d+)?\s+(?:-(?:X|W)\s+\S+\s+|-\S+\s+)*-c\b",
+                segment,
+            )
+            if not m:
+                return False
+            code = segment[m.end():]
+        code = re.sub(r"\s*\.\s*", ".", re.sub(r"\s+", " ", code)).lower()
+        return any(tok in code for tok in self._PY_DANGEROUS)
 
     def _canonical_path(self, value: str) -> str:
-        """Resolve symlinks / '..' / '.' in a path (best effort)."""
+        """Resolve symlinks / '..' / '.' in a path (best effort).
+
+        v2.6.2: expand "~" first — otherwise ~/... paths never
+        resolve to the protected store they name and slip past the
+        credential/symlink checks.
+        """
         try:
-            return str(Path(value).resolve())
+            return str(Path(value).expanduser().resolve())
         except Exception:
             return value
 
@@ -549,9 +646,10 @@ class ManasAegisCore:
         3 real events, the running HUD still showed 12). The handler
         calls this before every GET so the page always reflects disk.
         """
-        self._load_events()
-        self._load_scan_state()
-        self.threat_intel = _threat_intel.load_threat_intel(self.state_dir)
+        with self._lock:
+            self._load_events()
+            self._load_scan_state()
+            self.threat_intel = _threat_intel.load_threat_intel(self.state_dir)
 
     def _load_events(self) -> None:
         self._archived_count = 0
@@ -604,37 +702,57 @@ class ManasAegisCore:
                 pass
         self.events = []
 
-    def _save_events(self) -> None:
-        # Archive exactly the events that fall out of the live window.
-        # (The excess is computed from the current window itself, so no
-        # index bookkeeping can drift after trimming.)
-        excess = self.events[: max(0, len(self.events) - self.TELEMETRY_LIVE_MAX)]
-        archived_ok = True
-        if excess:
-            try:
-                with self._archive_path().open("a", encoding="utf-8") as fh:
-                    for ev in excess:
-                        fh.write(json.dumps(ev, ensure_ascii=False) + "\n")
-                if not getattr(self, "_archive_first_ts", ""):
-                    self._archive_first_ts = str(excess[0].get("timestamp", ""))
-                self._archived_count = getattr(self, "_archived_count", 0) + len(excess)
-                _sim = sum(1 for e in excess if e.get("source") == "simulation")
-                self._archived_simulation = getattr(self, "_archived_simulation", 0) + _sim
-                self._archived_runtime = getattr(self, "_archived_runtime", 0) + (len(excess) - _sim)
-            except Exception:
-                archived_ok = False
-        # Keep only the live window in memory; the rest is in the archive.
-        # (Only trim when archiving succeeded, so a failed archive write
-        # never loses events.)
-        if archived_ok and len(self.events) > self.TELEMETRY_LIVE_MAX:
-            self.events = self.events[-self.TELEMETRY_LIVE_MAX:]
-        path = self.state_dir / "manas_telemetry.json"
+    def _atomic_write_text(self, path: Path, text: str) -> None:
+        """Write `text` to `path` atomically (temp file + rename).
+
+        v2.6.2 (P2b): a crash mid-write used to leave a truncated
+        state file; readers then saw corrupt JSON. The temp file lives
+        in the same directory so os.replace() is atomic on one
+        filesystem, and a leftover temp file never masquerades as
+        state.
+        """
+        tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")
         try:
-            path.write_text(
-                json.dumps(self.events[-self.TELEMETRY_LIVE_MAX:], indent=2), encoding="utf-8"
-            )
-        except Exception:
-            pass
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, path)
+        finally:
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def _save_events(self) -> None:
+        with self._lock:
+            # Archive exactly the events that fall out of the live window.
+            # (The excess is computed from the current window itself, so no
+            # index bookkeeping can drift after trimming.)
+            excess = self.events[: max(0, len(self.events) - self.TELEMETRY_LIVE_MAX)]
+            archived_ok = True
+            if excess:
+                try:
+                    with self._archive_path().open("a", encoding="utf-8") as fh:
+                        for ev in excess:
+                            fh.write(json.dumps(ev, ensure_ascii=False) + "\n")
+                    if not getattr(self, "_archive_first_ts", ""):
+                        self._archive_first_ts = str(excess[0].get("timestamp", ""))
+                    self._archived_count = getattr(self, "_archived_count", 0) + len(excess)
+                    _sim = sum(1 for e in excess if e.get("source") == "simulation")
+                    self._archived_simulation = getattr(self, "_archived_simulation", 0) + _sim
+                    self._archived_runtime = getattr(self, "_archived_runtime", 0) + (len(excess) - _sim)
+                except Exception:
+                    archived_ok = False
+            # Keep only the live window in memory; the rest is in the archive.
+            # (Only trim when archiving succeeded, so a failed archive write
+            # never loses events.)
+            if archived_ok and len(self.events) > self.TELEMETRY_LIVE_MAX:
+                self.events = self.events[-self.TELEMETRY_LIVE_MAX:]
+            path = self.state_dir / "manas_telemetry.json"
+            try:
+                self._atomic_write_text(
+                    path, json.dumps(self.events[-self.TELEMETRY_LIVE_MAX:], indent=2)
+                )
+            except Exception:
+                pass
 
     def get_history_stats(self) -> Dict[str, Any]:
         total = len(self.events) + getattr(self, "_archived_count", 0)
@@ -705,24 +823,35 @@ class ManasAegisCore:
         return results[:limit]
 
     def clear_all_history(self) -> int:
-        """Delete live history, the archive, and the STIX feed. Returns
-        the number of live events cleared."""
-        cleared = len(self.events)
-        self.events = []
-        self._archived_count = 0
-        self._archive_first_ts = ""
-        for name in (
-            "manas_telemetry.json",
-            self.TELEMETRY_ARCHIVE_NAME,
-            "stix21_taxii_feed.json",
-        ):
-            try:
-                f = self.state_dir / name
-                if f.exists():
-                    f.unlink()
-            except Exception:
-                pass
-        return cleared
+        """Delete live history, the archive, the STIX feed, and the
+        scan findings. Returns the number of live events cleared.
+
+        v2.6.2 (P2c): scan findings are cleared too — the README
+        already promised this ("Menghapus riwayat dari HUD juga
+        menghapus temuan pindai"), but the code only cleared
+        telemetry/archive/STIX. The scan state file is rewritten
+        empty so a reload does not resurrect the findings.
+        """
+        with self._lock:
+            cleared = len(self.events)
+            self.events = []
+            self.scan_findings = []
+            self.last_scan = None
+            self._archived_count = 0
+            self._archive_first_ts = ""
+            for name in (
+                "manas_telemetry.json",
+                self.TELEMETRY_ARCHIVE_NAME,
+                "stix21_taxii_feed.json",
+            ):
+                try:
+                    f = self.state_dir / name
+                    if f.exists():
+                        f.unlink()
+                except Exception:
+                    pass
+            self._save_scan_state()
+            return cleared
 
     # ------------------------------------------------------------------
     # R2 (v2.4.0-alpha): user-defined rules (custom rules) + scan state
@@ -887,17 +1016,18 @@ class ManasAegisCore:
             self.scan_findings = [_migrate_old_finding(dict(f)) for f in findings[-50:] if isinstance(f, dict)]
 
     def _save_scan_state(self) -> None:
-        path = self.state_dir / "scan_state.json"
-        try:
-            path.write_text(
-                json.dumps(
-                    {"last_scan": self.last_scan, "findings": self.scan_findings[-50:]},
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        with self._lock:
+            path = self.state_dir / "scan_state.json"
+            try:
+                self._atomic_write_text(
+                    path,
+                    json.dumps(
+                        {"last_scan": self.last_scan, "findings": self.scan_findings[-50:]},
+                        indent=2,
+                    ),
+                )
+            except Exception:
+                pass
 
     def get_last_simulation(self) -> Optional[Dict[str, Any]]:
         """Derive the last barrage run from stored simulation events.
@@ -1186,7 +1316,7 @@ class ManasAegisCore:
         simulation_events = sum(1 for e in self.events if e.get("source") == "simulation")
         custom_rules = list(getattr(self, "custom_rules", []) or [])
         return {
-            "codename": "MANAS-AEGIS CORE v2.6.1-alpha",
+            "codename": "MANAS-AEGIS CORE v2.6.2-alpha",
             "alpha": True,
             "doctrine": self.config.get("tactical_doctrine", "counter_deceive").upper(),
             "cpe_23": f"cpe:2.3:a:nousresearch:hermes-agent:{hermes_ver}:*:*:*:*:*:*:*",
@@ -1343,6 +1473,29 @@ class ManasAegisCore:
             return score, "TRACK*"
         return score, "TRACK"
 
+    @staticmethod
+    def _extract_urls(text: str) -> List[str]:
+        """URLs in `text` with trailing JSON/log punctuation stripped.
+
+        v2.6.2 (P1c): the raw regex swallowed trailing punctuation
+        (`,`, `}`, `]`, `.`, `;` ...) when a URL sat at the end of a
+        JSON value or a log line, so `https://example.com},` was
+        evaluated as host `example.com},` — DNS failed and the
+        fail-closed SSRF check blocked a public host. Trailing
+        sentence punctuation is stripped; a closing bracket is only
+        stripped when its opener does not appear in the URL (so
+        Wikipedia-style `...(disambiguation)` URLs survive).
+        """
+        urls: List[str] = []
+        for raw in re.findall(r"https?://[^\s\"'<>]+", text):
+            u = raw.rstrip(".,;:!?")
+            for closer, opener in ((")", "("), ("]", "["), ("}", "{")):
+                while u.endswith(closer) and opener not in u:
+                    u = u[:-1].rstrip(".,;:!?")
+            if u:
+                urls.append(u)
+        return urls
+
     def evaluate_ssrf_target(self, url_text: str) -> Tuple[bool, str]:
         try:
             parsed = urlparse(url_text)
@@ -1357,7 +1510,7 @@ class ManasAegisCore:
                 return True, "ALLOWLISTED"
             try:
                 raw_ip = ipaddress.ip_address(host)
-                if raw_ip.is_private or raw_ip.is_loopback or raw_ip.is_link_local or raw_ip.is_reserved:
+                if raw_ip.is_private or raw_ip.is_loopback or raw_ip.is_link_local or raw_ip.is_reserved or raw_ip.is_multicast or raw_ip.is_unspecified:
                     return False, f"Direct internal/link-local IP {host} blocked (CWE-918 SSRF)"
             except ValueError:
                 pass
@@ -1365,11 +1518,11 @@ class ManasAegisCore:
                 return False, f"Restricted internal host '{host}'"
             for _, _, _, _, sockaddr in socket.getaddrinfo(host, parsed.port or 80):
                 ip_obj = ipaddress.ip_address(sockaddr[0])
-                if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved:
+                if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_multicast or ip_obj.is_unspecified:
                     return False, f"Host '{host}' resolved to internal IP {sockaddr[0]} (CWE-918 SSRF)"
         except socket.gaierror:
             # R3 (v2.6.0-alpha): FAIL-CLOSED. A DNS failure used to
-            # fall through to SAFE (the R1-verified fail-open hole).
+            # fall through to SAFE (the R1 fail-open hole, fixed in v2.6.0).
             # An unresolvable host is now blocked, not trusted.
             return False, f"DNS resolution failed for host '{host}' — fail-closed (CWE-918 SSRF)"
         except Exception as exc:
@@ -1432,7 +1585,7 @@ class ManasAegisCore:
                 }
 
             if self.config.get("ssrf_dns_firewall", True):
-                urls = re.findall(r"https?://[^\s\"'<>]+", serialized)
+                urls = self._extract_urls(serialized)
                 for u in urls:
                     ok, reason = self.evaluate_ssrf_target(u)
                     if not ok:
@@ -1465,9 +1618,10 @@ class ManasAegisCore:
                     "message": f"《 MANAS-AEGIS | SSVC:{ssvc} | Risk:{score}/100 》 Neutralized {spec.advisory_id}: Unauthorized configuration hook injection.",
                 }
 
-            for k, v in list(mutated_args.items()):
-                if not isinstance(v, str):
-                    continue
+            # v2.6.2 (P1b): walk ALL string leaves, not just the
+            # top-level arguments — a protected path nested in a
+            # dict/list used to slip past this check entirely.
+            for path, v in self._iter_string_leaves(mutated_args):
                 # R3: canonicalize the path first (symlink guard). A
                 # symlink to a protected store resolves to the store
                 # itself, so it is caught even when the raw arg hides
@@ -1485,7 +1639,7 @@ class ManasAegisCore:
                     self._mark_tainted(session_id, f"credential access: {v}")
                 if doctrine == "counter_deceive" and is_read_op:
                     decoy_target = str(self.honeypot_dir / ("decoy_auth.json" if "json" in v else "decoy.env"))
-                    mutated_args[k] = decoy_target
+                    self._set_nested(mutated_args, path, decoy_target)
                     was_mutated = True
                     self._log_stix_event(
                         spec,
@@ -1585,6 +1739,44 @@ class ManasAegisCore:
             if was_mutated:
                 return {"action": "modify", "args": mutated_args}
             return {}
+
+    def _iter_string_leaves(
+        self, value: Any, _path: Tuple[Any, ...] = ()
+    ) -> List[Tuple[Tuple[Any, ...], str]]:
+        """All string leaves of a nested args value, with their paths.
+
+        v2.6.2 (P1b): the credential/symlink checks used to look only
+        at top-level string arguments, so a protected path nested in a
+        dict/list slipped past entirely. The walk mirrors
+        _redact_evidence, so every leaf the redactor sees is checked.
+        """
+        out: List[Tuple[Tuple[Any, ...], str]] = []
+        if isinstance(value, dict):
+            for k, v in value.items():
+                out.extend(self._iter_string_leaves(v, _path + (k,)))
+        elif isinstance(value, (list, tuple)):
+            for idx, v in enumerate(value):
+                out.extend(self._iter_string_leaves(v, _path + (idx,)))
+        elif isinstance(value, str):
+            out.append((_path, value))
+        return out
+
+    def _set_nested(self, container: Any, path: Tuple[Any, ...], value: Any) -> None:
+        """Write `value` back at `path` (from _iter_string_leaves).
+
+        Tuples on the way down are rebuilt as lists (JSON args use
+        lists, but a Python caller may pass tuples, which are
+        immutable).
+        """
+        if len(path) == 1:
+            container[path[0]] = value
+            return
+        key = path[0]
+        child = container[key]
+        if isinstance(child, tuple):
+            child = list(child)
+            container[key] = child
+        self._set_nested(child, path[1:], value)
 
     def _redact_evidence(self, value: Any) -> Any:
         """Recursively redact secrets from a value before it is stored.
@@ -1868,7 +2060,7 @@ class ManasAegisCore:
                     if resolved != cand and any(p in resolved for p in self.PROTECTED_FILES):
                         new_hits.append("MANAS-SYMLINK-GUARD")
                         break
-            for u in re.findall(r"https?://[^\s\"'<>]+", ev):
+            for u in self._extract_urls(ev):
                 ok, _ = self.evaluate_ssrf_target(u)
                 if not ok:
                     new_hits.append("MANAS-SSRF-SINKHOLE:fail-closed")

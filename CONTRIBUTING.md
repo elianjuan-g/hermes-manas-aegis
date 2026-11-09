@@ -43,8 +43,8 @@ Jalankan tes dari direktori root repo:
 python3 -m unittest discover -v
 ```
 
-Saat ini ada **12 unit test** (6 lama + 6 baru R1) dan semuanya
-**lulus (12/12)**, diverifikasi 2026-11-09. Jangan menyembunyikan
+Saat ini ada **83 unit test** (61 dasar + 22 baru v2.6.2: 21 unit +
+1 kontrak) dan semuanya **lulus (83/83)**, diverifikasi 2026-11-09. Jangan menyembunyikan
 kegagalan tes: bila run Anda tidak hijau, tulis hasil sebenarnya
 di PR. Bila Anda menambah guard atau mengubah pola, tambahkan tes
 untuk: input normal, bypass/edge case, dan kondisi gagal (mis.

@@ -88,3 +88,18 @@ alur `<main>` bersama — jadi ganti tab hanya menukar panel bawah,
   `panelFade` hadir; nilai KPI fresh core benar (0/0/0/10).
 - Unit + kontrak 61/61, e2E R3 26/26, e2E posture-mini 17/17 —
   semuanya hijau kembali setelah perluasan.
+
+## Live (PC, 9 Nov 2026 ~15:20 WIB)
+
+- Install: backup v2.6.0 (1.2M) -> `/home/elian/.hermes/backups/manas-aegis/`;
+  state dipertahankan (cce_baseline, scan_state 50 temuan, threat_intel
+  25 item, dashboard, arena_last, tta_last); gateway restart, HUD
+  v2.6.1-alpha.
+- Verifikasi live (HTTP nyata, 20/20 PASS): versi v2.6.1-alpha; 1
+  posture-mini di dalam tab-act; KPI/scope/scan di dalam tab-act;
+  panelFade + animasi hadir; skor live 65/C (sama seperti v2.6.0 —
+  nilai tidak berubah, hanya tampilan + penempatan); CSRF 403/200;
+  arena 10/10 live; render ID benar ("Skor postur").
+- Repo: 53ef3c6 (posture-mini) + d7069f8 (per-tab + fade); PR #151504
+  -> v2.6.1 (YAML commit 735aa5c, komentar penjelasan diposting).
+- Self-verdict: PASS WITH NOTES (notes di atas tetap berlaku).

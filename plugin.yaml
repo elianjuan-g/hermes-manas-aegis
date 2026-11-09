@@ -1,5 +1,5 @@
 name: hermes-manas-aegis
-version: 2.6.1
+version: 2.6.2
 description: "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks that can block or rewrite some risky tool arguments, with local telemetry and a loopback HUD. Opt-in, test environments only — see README.md for limits."
 author: "Alianza Meridian Corp"
 license: "MIT"
@@ -57,3 +57,23 @@ config_schema:
     type: boolean
     default: true
     description: "Pre-resolve DNS and block RFC1918, loopback, and cloud metadata SSRF (CWE-918)."
+  taint_ttl_minutes:
+    type: integer
+    default: 60
+    description: "How long (minutes) a session stays tainted after a credential read before egress is allowed again. In-memory only; simulation never sets taint."
+  ssrf_allowlist:
+    type: array
+    default: []
+    description: "Named hosts trusted by the operator; SSRF validation is skipped for them. Use hostnames only (example: trusted.internal)."
+  callid_race_window_s:
+    type: integer
+    default: 10
+    description: "Window (seconds) in which an identical runtime tool call (same session + tool + arguments hash) is hard-blocked as a duplicate."
+  callid_race_enabled:
+    type: boolean
+    default: true
+    description: "Enable the duplicate-call race shield for runtime tool calls. Simulation and arena runs are always exempt."
+  hud_auth_token:
+    type: string
+    default: ""
+    description: "Optional shared secret for the loopback HUD login: when set, the HUD login page requires this token (submitted once, then a 24h HttpOnly session cookie). Empty means no login (loopback + CSRF + rate limit only)."

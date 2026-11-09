@@ -5,6 +5,69 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.6.2-alpha] — 2026-11-09
+
+Revisi atas audit Argon terhadap v2.6.1 (diteliti dan dikoreksi Ciel;
+nomor baris Argon tidak dipakai — semua temuan dilacak ulang dengan
+grep). Sembilan perbaikan: tiga P1 (shell parser, inspeksi argumen
+rekursif, SSRF), tiga P2 (packaging, HUD threading/lock/atomic,
+clear-history + skema config), tiga P3 (tombol suara mati, indikator
+loading intel, bersih-bersih dokumen).
+
+### Keamanan — diperbaiki
+
+- **Parser shell: subshell/backtick/baris baru tidak lagi memecah
+  pemeriksaan.** `$(...)` dan `` `...` `` kini dilacak (pemisah di
+  dalamnya tidak memecah segmen), dan `\n` menjadi pemisah — jadi
+  `$(curl ... | sh)` dan `echo ok\nrm -rf /tmp/x` tidak lolos lagi
+  lewat fragmentasi. `python -c` berbahaya kini terdeteksi juga
+  lewat `python3.11`, path absolut, dan flag gabungan
+  (`python3 -u -c`, `python3 -X utf8 -c`); `from os import system`
+  ikut diblokir.
+- **Pola RCE kini cocok untuk `rm -rf` ke path absolut apa pun**
+  (`rm -rf /tmp/x`, `rm -rf /`, `rm -fr`, `rm -r -f`, `--recursive
+  --force`, plus bentuk `$(rm -rf /)` dan backtick). Sebelumnya
+  pola menuntut `/` diikuti spasi/akhir/`*`, jadi `/tmp/x` lolos.
+  Bentuk baru `sh $(curl ...)` / `` sh `curl ...` `` (dan `eval`)
+  juga diblokir.
+- **Inspeksi argumen kini rekursif.** Path kredensial di dalam
+  dict/list bersarang ikut diperiksa (dulu hanya top-level), dan
+  `~` di-expand sebelum canonicalization — `~/.../.hermes/auth.json`
+  tidak lolos lagi.
+- **SSRF: multicast + unspecified diblokir** (IPv4/IPv6, literal
+  maupun hasil DNS); URL diekstrak dengan tanda baca JSON di akhir
+  dibersihkan supaya host publik tidak terblokir gara-gara `},`;
+  `scp`/`rsync`/`ssh`/`nc`/`dig`/`nslookup` (dan `sftp`/`ftp`)
+  kini dihitung sebagai egress untuk taint gating.
+
+### Diperbaiki
+
+- **Packaging: `MANIFEST.in` + `data-files`.** sdist dan wheel kini
+  membawa `plugin.yaml` + aset desktop (`desktop/plugin.js`) +
+  honeypot decoy — diverifikasi dari isi arsip hasil build.
+- **HUD: `ThreadingHTTPServer`** (dulu single-threaded);
+  `reload_state()`/`_save_events()`/`_save_scan_state()`/
+  `clear_all_history()` kini memakai lock yang sudah ada; tulis
+  state atomik (temp + rename).
+- **"Hapus riwayat" kini juga menghapus temuan pindai**
+  (`scan_findings` + `scan_state.json`), sesuai yang sudah dijanjikan
+  README. Strategi `MANAS-CALLID-RACE` di katalog diubah dari
+  `SYNTHESIZE_PATCH` menjadi `HARD_BLOCK` (sesuai perilaku nyata).
+  Lima kunci config R3 ditambahkan ke `plugin.yaml`
+  (`taint_ttl_minutes`, `ssrf_allowlist`, `callid_race_window_s`,
+  `callid_race_enabled`, `hud_auth_token`).
+- **Tombol Suara dihapus.** Tombol itu mati (hanya membalik
+  `localStorage`; tidak ada audio apa pun di HUD) — dihapus beserta
+  kunci i18n-nya daripada dipertahankan sebagai pajangan.
+- **Tombol Perbarui intel kini menunjukkan status loading**
+  (nonaktif + label "Memperbarui intel…" selama fetch berjalan).
+- **Dokumen dibersihkan:** klaim "8 eksperimental + 2 planned"
+  dihapus (10/10 enforced sejak v2.6.0); kontradiksi CSRF/rate-limit
+  diluruskan (CSRF + rate limit + token auth opt-in memang aktif);
+  teks SSRF fail-open yang basi dihapus dari README, komentar kode,
+  dan penjelasan aturan; `CONTRIBUTING.md` kini menyebut jumlah tes
+  yang sebenarnya.
+
 ## [2.6.1-alpha] — 2026-11-09
 
 Revisi kecil atas keluhan MyLord (screenshot HUD): kartu Skor Postur

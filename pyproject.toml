@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-manas-aegis"
-version = "2.6.1"
+version = "2.6.2"
 description = "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks with local telemetry and a loopback HUD. Opt-in, test environments only."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,3 +23,12 @@ Repository = "https://github.com/elianjuan-g/hermes-manas-aegis"
 # Code is byte-identical to the v2.2.0 submission zip; only build config.
 [tool.setuptools]
 packages = ["hermes_manas_aegis"]
+
+
+# v2.6.2: ship the plugin manifest + desktop assets in the wheel too
+# (the sdist carries them via MANIFEST.in). Hermes loads the plugin
+# from a source tree; these entries make the built artifacts complete.
+[tool.setuptools.data-files]
+"share/hermes-manas-aegis" = ["plugin.yaml", "README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE"]
+"share/hermes-manas-aegis/desktop" = ["desktop/plugin.js"]
+"share/hermes-manas-aegis/honeypot_sandbox" = ["honeypot_sandbox/decoy.env", "honeypot_sandbox/decoy_auth.json"]

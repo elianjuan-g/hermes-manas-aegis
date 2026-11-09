@@ -1,5 +1,5 @@
 """
-Contract tests for Hermes Manas-Aegis (R3, v2.6.1-alpha).
+Contract tests for Hermes Manas-Aegis (R3, v2.6.2-alpha).
 
 These verify the plugin's PUBLIC interface — what Hermes, the catalog
 validator, and the Desktop actually consume — not internals:
@@ -127,6 +127,25 @@ class TestPluginContract(unittest.TestCase):
         m = re.search(r"dependencies = \[(.*?)\]", toml_text, re.S)
         self.assertIsNotNone(m)
         self.assertEqual(m.group(1).strip(), "")
+
+    def test_packaging_manifest_and_config_schema(self) -> None:
+        # v2.6.2 (P2a): the sdist must carry the plugin manifest +
+        # desktop assets, and the five R3 config keys must be declared
+        # in plugin.yaml config_schema (they existed only in code).
+        manifest = (REPO / "MANIFEST.in").read_text(encoding="utf-8")
+        self.assertIn("plugin.yaml", manifest)
+        # recursive-include carries the whole dir (incl. plugin.js).
+        self.assertIn("recursive-include desktop *", manifest)
+        self.assertIn("recursive-include honeypot_sandbox *", manifest)
+        text = (REPO / "plugin.yaml").read_text(encoding="utf-8")
+        for key in (
+            "taint_ttl_minutes",
+            "ssrf_allowlist",
+            "callid_race_window_s",
+            "callid_race_enabled",
+            "hud_auth_token",
+        ):
+            self.assertIn(f"  {key}:", text, f"plugin.yaml config_schema missing {key}")
 
 
 if __name__ == "__main__":

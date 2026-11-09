@@ -12,7 +12,7 @@ import re
 import secrets
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
@@ -301,7 +301,6 @@ _SVG_SHIELD = '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 
 _SVG_ACTIVITY = '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
 _SVG_SEARCH = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
 _SVG_PLAY = '<polygon points="6 3 20 12 6 21 6 3"/>'
-_SVG_VOLUME = '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>'
 _SVG_REFRESH = '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'
 _SVG_SCAN = '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>'
 _SVG_TRASH = '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>'
@@ -666,6 +665,8 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
             "scan_done_clean": t(lang, "scan_done_clean"),
             "theme_dark": t(lang, "theme_dark"),
             "theme_light": t(lang, "theme_light"),
+            "intel_refresh": t(lang, "intel_refresh"),
+            "intel_refreshing": t(lang, "intel_refreshing"),
         }
     )
 
@@ -776,7 +777,6 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 <label>{t(lang, "lang_label")}</label>
 <select id="langSel" onchange="setLang(this.value)">{lang_options}</select>
 <button class="btn" id="themeBtn" onclick="toggleTheme()">{_svg(_SVG_SUN)}<span>{t(lang, "theme_light")}</span></button>
-<button class="btn" onclick="toggleSound()">{_svg(_SVG_VOLUME)}<span>{t(lang, "sound")}</span></button>
 <button class="btn btn-primary" onclick="triggerBarrage()">{_svg(_SVG_PLAY)}<span>{t(lang, "run_sim")}</span></button>
 </div>
 </div>
@@ -824,7 +824,7 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 <h3 class="section-title">{t(lang, "intel_global_title")}</h3>
 <div class="note">{t(lang, "intel_global_note", sources=sources)}</div>
 {f'<div class="note">{html.escape(intel_status)}</div>' if intel_status else ""}
-<div style="margin:10px 0"><button class="btn" onclick="refreshIntel()">{_svg(_SVG_REFRESH)}<span>{t(lang, "intel_refresh")}</span></button></div>
+<div style="margin:10px 0"><button class="btn" id="intelRefreshBtn" onclick="refreshIntel()">{_svg(_SVG_REFRESH)}<span>{t(lang, "intel_refresh")}</span></button></div>
 {f'<div class="tablewrap"><table><tr><th>{t(lang, "intel_col_id")}</th><th>{t(lang, "intel_col_product")}</th><th>{t(lang, "intel_col_level")}</th><th>{t(lang, "intel_col_date")}</th><th>{t(lang, "intel_explain")}</th></tr>{intel_rows}</table></div>' if intel_rows else f'<div class="empty">{t(lang, "intel_none")}</div>'}
 <h3 class="section-title">{t(lang, "tab_intel")}</h3>
 <div class="tablewrap"><table><tr><th>{t(lang, "col_rule")}</th><th>{t(lang, "intel_advisory")}</th><th>{t(lang, "intel_status")}</th><th>{t(lang, "col_action")}</th><th>{t(lang, "intel_explain")}</th><th>{t(lang, "intel_note_col")}</th></tr>{cat_rows}</table></div>
@@ -848,18 +848,16 @@ const I18N = {i18n_js};
 const CSRF = (document.querySelector('meta[name="csrf-token"]') || {{content: ''}}).content;
 const ICON_SUN = `{_svg(_SVG_SUN, 14)}`;
 const ICON_MOON = `{_svg(_SVG_MOON, 14)}`;
-let soundOn = localStorage.getItem('manas-aegis-sound') === '1';
 function setLang(v){{localStorage.setItem('manas-aegis-lang', v); const u = new URL(location.href); u.searchParams.set('lang', v); location.href = u.toString();}}
 (function(){{const s = localStorage.getItem('manas-aegis-lang'); const u = new URL(location.href); if(!u.searchParams.get('lang') && s && s !== document.documentElement.lang){{u.searchParams.set('lang', s); location.replace(u.toString());}}}})();
 function applyTheme(theme){{document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('manas-aegis-theme', theme); const b = document.getElementById('themeBtn'); if(b){{ b.innerHTML = (theme === 'light' ? ICON_MOON + '<span>' + I18N.theme_dark + '</span>' : ICON_SUN + '<span>' + I18N.theme_light + '</span>'); }}}}
 function toggleTheme(){{const cur = document.documentElement.getAttribute('data-theme') || 'dark'; applyTheme(cur === 'dark' ? 'light' : 'dark');}}
 (function(){{const saved = localStorage.getItem('manas-aegis-theme'); applyTheme(saved === 'light' ? 'light' : 'dark');}})();
 function showTab(id, el){{document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.getElementById('tab-' + id).classList.add('active'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); el.classList.add('active');}}
-function toggleSound(){{soundOn = !soundOn; localStorage.setItem('manas-aegis-sound', soundOn ? '1' : '0');}}
 async function triggerBarrage(){{if(!confirm(I18N.confirm_barrage)) return; try{{const r = await fetch('/api/barrage', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{alert(I18N.barrage_done.replace('{{matched}}', d.results.filter(x => x.verdict === 'block' || x.verdict === 'modify').length)); location.reload();}} else {{alert(I18N.alert_barrage_fail);}}}} catch(e){{alert(I18N.alert_barrage_fail);}}}}
 async function clearHistory(){{if(!confirm(I18N.confirm_clear)) return; try{{const r = await fetch('/api/clear-history', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{location.reload();}} else {{alert(I18N.alert_clear_fail);}}}} catch(e){{alert(I18N.alert_clear_fail);}}}}
 async function runScan(scope){{try{{const r = await fetch('/api/scan', {{method: 'POST', headers: {{'Content-Type': 'application/json', 'X-CSRF-Token': CSRF}}, body: JSON.stringify({{scope}})}}); const d = await r.json(); if(d.status === 'ok'){{const s = d.scan; alert(s.findings === 0 ? I18N.scan_done_clean.replace('{{scope}}', scope) : I18N.scan_done.replace('{{scope}}', scope).replace('{{findings}}', s.findings).replace('{{critical}}', s.critical)); const u = new URL(location.href); u.searchParams.set('tab', 'find'); u.searchParams.delete('q'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
-async function refreshIntel(){{try{{await fetch('/api/intel-refresh', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); setTimeout(() => location.reload(), 4000);}} catch(e){{}}}}
+async function refreshIntel(){{const b=document.getElementById('intelRefreshBtn'); if(b){{b.disabled=true; const s=b.querySelector('span'); if(s) s.textContent=I18N.intel_refreshing;}} try{{await fetch('/api/intel-refresh', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); setTimeout(() => location.reload(), 4000);}} catch(e){{if(b){{b.disabled=false; const s=b.querySelector('span'); if(s) s.textContent=I18N.intel_refresh;}}}}}}
 async function runArena(){{try{{const r = await fetch('/api/arena', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{const u = new URL(location.href); u.searchParams.set('tab', 'arena'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
 async function runTimeTravel(){{try{{const r = await fetch('/api/time-travel', {{method: 'POST', headers: {{'X-CSRF-Token': CSRF}}}}); const d = await r.json(); if(d.status === 'ok'){{const u = new URL(location.href); u.searchParams.set('tab', 'arena'); location.href = u.toString();}} else {{alert(I18N.alert_scan_fail);}}}} catch(e){{alert(I18N.alert_scan_fail);}}}}
 </script>
@@ -1059,7 +1057,7 @@ def ensure_hud_server_running(port: int = 18777) -> str:
     global _SERVER_STARTED, _SERVER_OK
     if not _SERVER_STARTED:
         try:
-            server = HTTPServer(("127.0.0.1", port), _ManasHUDHandler)
+            server = ThreadingHTTPServer(("127.0.0.1", port), _ManasHUDHandler)
             t = threading.Thread(target=server.serve_forever, daemon=True)
             t.start()
             _SERVER_STARTED = True

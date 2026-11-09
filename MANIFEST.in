@@ -1,0 +1,12 @@
+include plugin.yaml
+include README.md
+include CHANGELOG.md
+include SECURITY.md
+include CONTRIBUTING.md
+include LICENSE
+include pyproject.toml
+recursive-include desktop *
+recursive-include honeypot_sandbox *
+recursive-include .github *
+global-exclude *.pyc
+global-exclude __pycache__

@@ -1,4 +1,4 @@
-"""Manas Aegis HUD translations (v2.6.1-alpha).
+"""Manas Aegis HUD translations (v2.6.2-alpha).
 
 English is the default language. Every language must define every key
 in the English dict; t() falls back to English for any missing key, and
@@ -34,7 +34,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "en": {
         "title_sub": "Protection for Hermes Agent activity — ALPHA",
         "title_sub2": "Local STIX 2.1 · No external TAXII feed",
-        "sound": "Sound",
         "posture_score": "Posture score",
         "posture_rules": "Rules",
         "posture_enforcement": "Enforcement",
@@ -168,6 +167,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Data may be outdated — last update {time}.",
         "intel_offline": "Could not reach the intel sources (no internet or source unreachable). Showing the last saved data.",
         "intel_refresh": "Refresh intel",
+        "intel_refreshing": "Refreshing intel…",
         "intel_none": "No global intel saved yet.",
         "intel_col_id": "ID",
         "intel_col_product": "Product",
@@ -216,7 +216,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "id": {
         "title_sub": "Perlindungan aktivitas Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 lokal · Tanpa feed TAXII eksternal",
-        "sound": "Suara",
         "posture_score": "Skor postur",
         "posture_rules": "Aturan",
         "posture_enforcement": "Penegakan",
@@ -350,6 +349,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Data mungkin sudah kedaluwarsa — pembaruan terakhir {time}.",
         "intel_offline": "Tidak dapat menjangkau sumber intelijen (tanpa internet atau sumber tidak dapat dijangkau). Menampilkan data terakhir yang tersimpan.",
         "intel_refresh": "Perbarui intel",
+        "intel_refreshing": "Memperbarui intel…",
         "intel_none": "Belum ada intel global tersimpan.",
         "intel_col_id": "ID",
         "intel_col_product": "Produk",
@@ -398,7 +398,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "es": {
         "title_sub": "Protección de la actividad de Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 local · Sin feed TAXII externo",
-        "sound": "Sonido",
         "posture_score": "Puntuación de postura",
         "posture_rules": "Reglas",
         "posture_enforcement": "Aplicación",
@@ -532,6 +531,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Los datos pueden estar desactualizados — última actualización {time}.",
         "intel_offline": "No se pudo contactar con las fuentes de inteligencia (sin internet o fuente no disponible). Se muestran los últimos datos guardados.",
         "intel_refresh": "Actualizar inteligencia",
+        "intel_refreshing": "Actualizando inteligencia…",
         "intel_none": "Aún no hay inteligencia global guardada.",
         "intel_col_id": "ID",
         "intel_col_product": "Producto",
@@ -580,7 +580,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "fr": {
         "title_sub": "Protection de l'activité Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 local · Aucun flux TAXII externe",
-        "sound": "Son",
         "posture_score": "Score de posture",
         "posture_rules": "Règles",
         "posture_enforcement": "Application",
@@ -714,6 +713,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Les données sont peut-être obsolètes — dernière mise à jour {time}.",
         "intel_offline": "Impossible de joindre les sources de renseignement (pas d'Internet ou source inaccessible). Affichage des dernières données enregistrées.",
         "intel_refresh": "Actualiser les renseignements",
+        "intel_refreshing": "Actualisation des renseignements…",
         "intel_none": "Aucun renseignement mondial enregistré pour l'instant.",
         "intel_col_id": "ID",
         "intel_col_product": "Produit",
@@ -762,7 +762,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "de": {
         "title_sub": "Schutz für Hermes-Agent-Aktivitäten — ALPHA",
         "title_sub2": "Lokales STIX 2.1 · Kein externer TAXII-Feed",
-        "sound": "Ton",
         "posture_score": "Haltungswert",
         "posture_rules": "Regeln",
         "posture_enforcement": "Durchsetzung",
@@ -896,6 +895,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Daten sind möglicherweise veraltet — letzte Aktualisierung {time}.",
         "intel_offline": "Intel-Quellen nicht erreichbar (kein Internet oder Quelle nicht erreichbar). Es werden die zuletzt gespeicherten Daten angezeigt.",
         "intel_refresh": "Infos aktualisieren",
+        "intel_refreshing": "Infos werden aktualisiert…",
         "intel_none": "Noch keine globalen Infos gespeichert.",
         "intel_col_id": "ID",
         "intel_col_product": "Produkt",
@@ -944,7 +944,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "pt": {
         "title_sub": "Proteção da atividade do Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 local · Sem feed TAXII externo",
-        "sound": "Som",
         "posture_score": "Pontuação de postura",
         "posture_rules": "Regras",
         "posture_enforcement": "Aplicação",
@@ -1078,6 +1077,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Os dados podem estar desatualizados — última atualização {time}.",
         "intel_offline": "Não foi possível alcançar as fontes de inteligência (sem internet ou fonte indisponível). Mostrando os últimos dados salvos.",
         "intel_refresh": "Atualizar inteligência",
+        "intel_refreshing": "Atualizando inteligência…",
         "intel_none": "Nenhuma inteligência global salva ainda.",
         "intel_col_id": "ID",
         "intel_col_product": "Produto",
@@ -1126,7 +1126,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "it": {
         "title_sub": "Protezione dell'attività di Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 locale · Nessun feed TAXII esterno",
-        "sound": "Audio",
         "posture_score": "Punteggio di postura",
         "posture_rules": "Regole",
         "posture_enforcement": "Applicazione",
@@ -1260,6 +1259,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "I dati potrebbero essere obsoleti — ultimo aggiornamento {time}.",
         "intel_offline": "Impossibile raggiungere le fonti di intelligence (nessuna connessione o fonte non raggiungibile). Vengono mostrati gli ultimi dati salvati.",
         "intel_refresh": "Aggiorna intelligence",
+        "intel_refreshing": "Aggiornamento intelligence…",
         "intel_none": "Ancora nessuna intelligence globale salvata.",
         "intel_col_id": "ID",
         "intel_col_product": "Prodotto",
@@ -1308,7 +1308,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "ru": {
         "title_sub": "Защита активности Hermes Agent — ALPHA",
         "title_sub2": "Локальный STIX 2.1 · Без внешнего TAXII-канала",
-        "sound": "Звук",
         "posture_score": "Оценка защиты",
         "posture_rules": "Правила",
         "posture_enforcement": "Применение",
@@ -1442,6 +1441,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Данные могут быть устаревшими — последнее обновление {time}.",
         "intel_offline": "Не удалось связаться с источниками данных (нет интернета или источник недоступен). Показаны последние сохранённые данные.",
         "intel_refresh": "Обновить данные",
+        "intel_refreshing": "Обновление данных…",
         "intel_none": "Глобальные данные пока не сохранены.",
         "intel_col_id": "ID",
         "intel_col_product": "Продукт",
@@ -1490,7 +1490,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "tr": {
         "title_sub": "Hermes Agent etkinliği koruması — ALPHA",
         "title_sub2": "Yerel STIX 2.1 · Harici TAXII akışı yok",
-        "sound": "Ses",
         "posture_score": "Duruş puanı",
         "posture_rules": "Kurallar",
         "posture_enforcement": "Uygulama",
@@ -1624,6 +1623,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Veriler eski olabilir — son güncelleme {time}.",
         "intel_offline": "İstihbarat kaynaklarına ulaşılamadı (internet yok veya kaynak erişilemiyor). Son kaydedilen veriler gösteriliyor.",
         "intel_refresh": "İstihbaratı yenile",
+        "intel_refreshing": "İstihbarat yenileniyor…",
         "intel_none": "Henüz kaydedilmiş küresel istihbarat yok.",
         "intel_col_id": "Kimlik",
         "intel_col_product": "Ürün",
@@ -1672,7 +1672,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "ar": {
         "title_sub": "حماية نشاط Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 محلي · لا يوجد تغذية TAXII خارجية",
-        "sound": "الصوت",
         "posture_score": "نقاط الوضع",
         "posture_rules": "القواعد",
         "posture_enforcement": "التنفيذ",
@@ -1806,6 +1805,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "قد تكون البيانات قديمة — آخر تحديث {time}.",
         "intel_offline": "تعذّر الوصول إلى مصادر المعلومات (لا يوجد إنترنت أو المصدر غير متاح). يتم عرض آخر بيانات محفوظة.",
         "intel_refresh": "تحديث المعلومات",
+        "intel_refreshing": "جارٍ تحديث المعلومات…",
         "intel_none": "لا توجد معلومات عالمية محفوظة بعد.",
         "intel_col_id": "المعرّف",
         "intel_col_product": "المنتج",
@@ -1854,7 +1854,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "hi": {
         "title_sub": "Hermes Agent गतिविधि की सुरक्षा — ALPHA",
         "title_sub2": "स्थानीय STIX 2.1 · कोई बाहरी TAXII फ़ीड नहीं",
-        "sound": "ध्वनि",
         "posture_score": "मुद्रा स्कोर",
         "posture_rules": "नियम",
         "posture_enforcement": "प्रवर्तन",
@@ -1988,6 +1987,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "डेटा पुराना हो सकता है — अंतिम अपडेट {time}।",
         "intel_offline": "खुफिया स्रोतों तक नहीं पहुँच सके (इंटरनेट नहीं या स्रोत अनुपलब्ध)। अंतिम सहेजा डेटा दिखाया जा रहा है।",
         "intel_refresh": "खुफिया जानकारी ताज़ा करें",
+        "intel_refreshing": "खुफिया जानकारी अपडेट हो रही है…",
         "intel_none": "अभी तक कोई वैश्विक खुफिया जानकारी सहेजी नहीं गई।",
         "intel_col_id": "ID",
         "intel_col_product": "उत्पाद",
@@ -2036,7 +2036,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "zh": {
         "title_sub": "Hermes Agent 活动保护 — ALPHA",
         "title_sub2": "本地 STIX 2.1 · 无外部 TAXII 源",
-        "sound": "声音",
         "posture_score": "姿态分数",
         "posture_rules": "规则",
         "posture_enforcement": "执行",
@@ -2170,6 +2169,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "数据可能已过期 — 上次更新 {time}。",
         "intel_offline": "无法访问情报来源（无网络或来源不可达）。显示上次保存的数据。",
         "intel_refresh": "刷新情报",
+        "intel_refreshing": "正在刷新情报…",
         "intel_none": "尚无保存的全球情报。",
         "intel_col_id": "ID",
         "intel_col_product": "产品",
@@ -2218,7 +2218,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "ja": {
         "title_sub": "Hermes Agent の活動保護 — ALPHA",
         "title_sub2": "ローカル STIX 2.1 · 外部 TAXII フィードなし",
-        "sound": "音",
         "posture_score": "姿勢スコア",
         "posture_rules": "ルール",
         "posture_enforcement": "施行",
@@ -2352,6 +2351,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "データが古い可能性があります — 最終更新 {time}。",
         "intel_offline": "インテリジェンスソースに到達できませんでした（インターネットなし、またはソースに到達不可）。最後に保存されたデータを表示しています。",
         "intel_refresh": "インテリジェンスを更新",
+        "intel_refreshing": "インテリジェンスを更新中…",
         "intel_none": "保存されたグローバルインテリジェンスはまだありません。",
         "intel_col_id": "ID",
         "intel_col_product": "製品",
@@ -2400,7 +2400,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "ko": {
         "title_sub": "Hermes Agent 활동 보호 — ALPHA",
         "title_sub2": "로컬 STIX 2.1 · 외부 TAXII 피드 없음",
-        "sound": "소리",
         "posture_score": "자세 점수",
         "posture_rules": "규칙",
         "posture_enforcement": "집행",
@@ -2534,6 +2533,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "데이터가 오래되었을 수 있습니다 — 마지막 업데이트 {time}.",
         "intel_offline": "인텔리전스 소스에 연결할 수 없습니다 (인터넷 없음 또는 소스 연결 불가). 마지막으로 저장된 데이터를 표시합니다.",
         "intel_refresh": "인텔리전스 새로 고침",
+        "intel_refreshing": "인텔리전스 새로 고치는 중…",
         "intel_none": "아직 저장된 글로벌 인텔리전스가 없습니다.",
         "intel_col_id": "ID",
         "intel_col_product": "제품",
@@ -2582,7 +2582,6 @@ LANGS: Dict[str, Dict[str, str]] = {
     "vi": {
         "title_sub": "Bảo vệ hoạt động của Hermes Agent — ALPHA",
         "title_sub2": "STIX 2.1 cục bộ · Không có nguồn TAXII bên ngoài",
-        "sound": "Âm thanh",
         "posture_score": "Điểm tư thế",
         "posture_rules": "Quy tắc",
         "posture_enforcement": "Thực thi",
@@ -2716,6 +2715,7 @@ LANGS: Dict[str, Dict[str, str]] = {
         "intel_stale": "Dữ liệu có thể đã cũ — cập nhật lần cuối {time}.",
         "intel_offline": "Không thể liên hệ nguồn thông tin (không có internet hoặc nguồn không truy cập được). Đang hiển thị dữ liệu đã lưu gần nhất.",
         "intel_refresh": "Làm mới thông tin",
+        "intel_refreshing": "Đang làm mới thông tin…",
         "intel_none": "Chưa có thông tin toàn cầu nào được lưu.",
         "intel_col_id": "ID",
         "intel_col_product": "Sản phẩm",
@@ -2770,31 +2770,31 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-GIT-FS-RCE": {
         "en": {
             "lay": "Stops git commands that quietly change repo settings so they can run something dangerous.",
-            "pro": "Rewrites git subcommands (status/diff/log/checkout/pull/fetch/clone) with safe flags (core.fsmonitor=false, core.hooksPath=/dev/null, protocol.file.allow=never). First occurrence only; chained commands escape it.",
+            "pro": "Rewrites the first git subcommand per shell segment (status/diff/log/checkout/pull/fetch/clone) with safe flags (core.fsmonitor=false, core.hooksPath=/dev/null, protocol.file.allow=never). Chained commands are split into segments first, so each segment is checked and rewritten on its own.",
         },
         "id": {
             "lay": "Menghentikan perintah git yang diam-diam mengubah pengaturan repo sehingga bisa menjalankan hal berbahaya.",
-            "pro": "Menulis ulang subcommand git (status/diff/log/checkout/pull/fetch/clone) dengan flag aman (core.fsmonitor=false, core.hooksPath=/dev/null, protocol.file.allow=never). Hanya kemunculan pertama; perintah berantai lolos.",
+            "pro": "Menulis ulang subcommand git pertama per segmen shell (status/diff/log/checkout/pull/fetch/clone) dengan flag aman (core.fsmonitor=false, core.hooksPath=/dev/null, protocol.file.allow=never). Perintah berantai dipecah jadi segmen dulu, jadi tiap segmen diperiksa dan ditulis ulang sendiri.",
         },
     },
     "MANAS-CRED-HONEYPOT": {
         "en": {
             "lay": "If something tries to read a file with passwords or keys, it is given a fake file (decoy) instead, so the real secrets stay safe.",
-            "pro": "Substring match on known credential paths; read operations are redirected to a canary decoy or blocked. No path canonicalization and no symlink check.",
+            "pro": "Recursive substring match on known credential paths (including nested dicts/lists); arguments are canonicalized (symlinks resolved, ~ expanded). Read operations are redirected to a canary decoy or blocked. Runtime only.",
         },
         "id": {
             "lay": "Bila ada yang mencoba membaca berkas berisi kata sandi atau kunci, ia diberi berkas palsu (umpan), sehingga rahasia asli tetap aman.",
-            "pro": "Cocok substring pada path kredensial yang dikenal; operasi baca dialihkan ke decoy canary atau diblokir. Tanpa canonicalization path dan tanpa pemeriksaan symlink.",
+            "pro": "Cocok substring rekursif pada path kredensial yang dikenal (termasuk dict/list bersarang); argumen dikanonikalisasi (symlink di-resolve, ~ di-expand). Operasi baca dialihkan ke decoy canary atau diblokir. Runtime saja.",
         },
     },
     "MANAS-SSRF-SINKHOLE": {
         "en": {
             "lay": "Blocks requests to internal addresses (this server / cloud data) so internal data cannot leak out.",
-            "pro": "Checks URLs in tool arguments against private, loopback, link-local, reserved, localhost, and cloud-metadata hosts. DNS failure is currently treated as SAFE (fail-open; fail-closed planned in R2).",
+            "pro": "Checks URLs in tool arguments against private, loopback, link-local, reserved, multicast, unspecified, localhost, and cloud-metadata hosts. DNS failure is treated as UNSAFE (fail-closed since v2.6.0-alpha).",
         },
         "id": {
             "lay": "Memblokir permintaan ke alamat internal (server ini / data cloud) agar data internal tidak bocor keluar.",
-            "pro": "Memeriksa URL di argumen tool terhadap host privat, loopback, link-local, reserved, localhost, dan metadata cloud. DNS yang gagal saat ini dianggap SAFE (fail-open; fail-closed direncanakan di R2).",
+            "pro": "Memeriksa URL di argumen tool terhadap host privat, loopback, link-local, reserved, multicast, unspecified, localhost, dan metadata cloud. DNS yang gagal dianggap TIDAK AMAN (fail-closed sejak v2.6.0-alpha).",
         },
     },
     "MANAS-WEBHOOK-AUTH": {
@@ -2830,11 +2830,11 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-SYMLINK-GUARD": {
         "en": {
             "lay": "Stops traps that use file links (symlinks) pointing at a protected file.",
-            "pro": "Enforced since v2.6.1-alpha: arguments are canonicalized (symlinks resolved); a read that resolves to a protected file is redirected to the honeypot decoy. Runtime only.",
+            "pro": "Enforced since v2.6.0-alpha: arguments are canonicalized (symlinks resolved, ~ expanded) and checked recursively; a read that resolves to a protected file is redirected to the honeypot decoy. Runtime only.",
         },
         "id": {
             "lay": "Menghentikan jebakan yang memakai tautan berkas (symlink) yang menunjuk ke berkas terlindungi.",
-            "pro": "Ditegakkan sejak v2.6.1-alpha: argumen dikanonikalisasi (symlink di-resolve); baca yang mengarah ke berkas terlindungi dialihkan ke decoy honeypot. Runtime saja.",
+            "pro": "Ditegakkan sejak v2.6.0-alpha: argumen dikanonikalisasi (symlink di-resolve, ~ di-expand) dan diperiksa rekursif; baca yang mengarah ke berkas terlindungi dialihkan ke decoy honeypot. Runtime saja.",
         },
     },
     "MANAS-SQLI-AST": {
@@ -2850,21 +2850,21 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-SHELL-RCE": {
         "en": {
             "lay": "Blocks destructive shell commands (forced delete, reverse shell, download-and-run).",
-            "pro": "Regex match for destructive shell commands, plus a real shell parser (v2.6.1-alpha) that splits chained commands on ;, &&, ||, | and blocks dangerous python -c forms per segment. Not a shell sandbox.",
+            "pro": "Regex match for destructive shell commands, plus a real shell parser (v2.6.0-alpha) that splits chained commands on ;, &&, ||, |, & and newlines — respecting quotes, escapes, $(...) and backticks — and blocks dangerous python -c forms per segment. Not a shell sandbox.",
         },
         "id": {
             "lay": "Memblokir perintah shell yang merusak (hapus paksa, reverse shell, unduh-lalu-jalankan).",
-            "pro": "Cocok regex untuk perintah shell destruktif, plus parser shell nyata (v2.6.1-alpha) yang memecah perintah berantai pada ;, &&, ||, | dan memblokir bentuk python -c berbahaya per segmen. Bukan sandbox shell.",
+            "pro": "Cocok regex untuk perintah shell destruktif, plus parser shell nyata (v2.6.0-alpha) yang memecah perintah berantai pada ;, &&, ||, |, & dan baris baru — menghormati quote, escape, $(...) dan backtick — dan memblokir bentuk python -c berbahaya per segmen. Bukan sandbox shell.",
         },
     },
     "MANAS-CALLID-RACE": {
         "en": {
             "lay": "Stops the same tool call being fired twice in the same session (duplicate/race).",
-            "pro": "Enforced since v2.6.1-alpha: identical runtime calls (same session + tool + arguments hash) within 10 s are hard-blocked. Simulation exempt.",
+            "pro": "Enforced since v2.6.0-alpha: identical runtime calls (same session + tool + arguments hash) within 10 s are hard-blocked. Simulation exempt.",
         },
         "id": {
             "lay": "Menghentikan dua sesi yang berebut call ID yang sama (duplikat/race).",
-            "pro": "Ditegakkan sejak v2.6.1-alpha: pemanggilan runtime yang identik (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block. Simulasi dikecualikan.",
+            "pro": "Ditegakkan sejak v2.6.0-alpha: pemanggilan runtime yang identik (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block. Simulasi dikecualikan.",
         },
     },
 }
