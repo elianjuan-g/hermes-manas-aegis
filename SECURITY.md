@@ -1,45 +1,53 @@
-# Keamanan — Cara Melaporkan Celah (SECURITY.md)
+# Security — How to Report a Vulnerability (SECURITY.md)
 
-Manas Aegis masih **ALPHA / prototipe** (v2.6.2-alpha). Laporan celah
-sangat membantu — tapi mohon laporkan dengan cara yang aman.
+Manas Aegis is still **ALPHA / prototype** (v2.6.2-alpha). Vulnerability
+reports help a lot — but please report them safely.
 
-## Cara melaporkan
+## How to report
 
-Laporkan lewat **GitHub Issues repo ini dengan label `security`**.
+Report via **GitHub Issues on this repo with the `security` label**.
 
-Sertakan:
+Include:
 
-1. Apa yang terjadi (langkah untuk mengulang, sesingkat mungkin).
-2. Versi plugin dan versi Hermes yang Anda pakai.
-3. Apa yang Anda harapkan terjadi vs. apa yang benar-benar terjadi.
-4. Bila ada, potongan argumen/log yang relevan — **setelah
-   menghapus secret, token, atau data pribadi apa pun**.
+1. What happened (steps to reproduce, as short as possible).
+2. The plugin version and Hermes version you use.
+3. What you expected to happen vs. what actually happened.
+4. If relevant, a snippet of the argument/log — **after removing any
+   secret, token, or personal data**.
 
-## Yang TIDAK boleh dilakukan
+## What you must NOT do
 
-- **Jangan menguji celah di sistem atau data orang lain.** Uji
-  hanya di lingkungan Anda sendiri.
-- **Jangan mempublikasikan detail celah** (di media sosial, blog,
-  atau issue publik tanpa label security) sebelum ada perbaikan.
-- **Jangan memasukkan secret/token asli** ke dalam laporan.
-- **Jangan memakai celah yang Anda temukan** untuk mengakses,
-  mengubah, atau merusak apa pun.
+- **Do not test vulnerabilities on other people's systems or data.**
+  Test only in your own environment.
+- **Do not publish vulnerability details** (on social media, a blog,
+  or a public issue without the security label) before a fix exists.
+- **Do not include real secrets/tokens** in the report.
+- **Do not use a vulnerability you found** to access, change, or
+  damage anything.
 
-## Kebijakan
+## Policy
 
-- **Tidak ada bounty.** Tidak ada hadiah uang untuk laporan celah.
-- Laporan yang masuk akan dibaca maintainer; perbaikan dilakukan
-  sesuai prioritas (celah yang paling berbahaya didahulukan).
-- Celah yang sudah diketahui dan dicatat di CHANGELOG (bagian
-  "Diketahui, masuk R2") tidak perlu dilaporkan ulang — kecuali
-  Anda menemukan varian atau dampak baru.
+- **No bounty.** There is no monetary reward for vulnerability reports.
+- Incoming reports are read by the maintainer; fixes are prioritised
+  (the most dangerous vulnerabilities first).
+- Known vulnerabilities already recorded in the CHANGELOG (the
+  "Known, queued for R2" section) do not need to be reported again —
+  unless you find a new variant or impact.
 
-## Catatan jujur soal status keamanan plugin ini
+## Honest note on this plugin's security status
 
-Plugin ini adalah guardrail berbasis pola, bukan pertahanan
-keamanan mandiri. Celah yang sudah diketahui (lihat README.md
-tabel guard dan CHANGELOG.md) antara lain: SSRF fail-open saat
-DNS gagal, bypass perintah git berantai, `python -c` yang lolos
-dari pola, tidak ada canonicalization path/symlink check, dan
-HUD tanpa autentikasi/CSRF/rate limit. Jangan memakai plugin ini
-untuk melindungi secret atau operasi produksi.
+This plugin is a pattern-based guardrail, not standalone security.
+Do not use it to protect secrets or production operations.
+
+The issues that were listed as known in earlier versions are now
+fixed: SSRF is fail-closed when DNS fails (since v2.6.0); chained git
+commands are handled by a real shell parser (since v2.6.0); dangerous
+`python -c` is detected through absolute paths and combined flags
+(since v2.6.0, hardened in v2.6.2); paths are canonicalized and
+symlinks are checked (since v2.6.0); and the HUD has CSRF protection,
+rate limiting, and opt-in token authentication (since v2.6.0).
+
+What remains true: the guard is pattern-based, so new bypass variants
+may exist; telemetry stores redacted evidence fragments; and the HUD
+is loopback-only with token auth off by default. Current limits are
+listed in README.md (guard table) and CHANGELOG.md.

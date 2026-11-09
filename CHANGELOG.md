@@ -1,544 +1,534 @@
 # Changelog — Manas Aegis
 
-Semua perubahan penting pada plugin ini dicatat di sini. Format
-mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
-`-alpha` selama masih prototipe.
+All important changes to this plugin are recorded here. The format
+loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versions use `MAJOR.MINOR.PATCH` + the `-alpha` label while the
+plugin is still a prototype.
 
 ## [2.6.2-alpha] — 2026-11-09
 
-Revisi atas audit Argon terhadap v2.6.1 (diteliti dan dikoreksi Ciel;
-nomor baris Argon tidak dipakai — semua temuan dilacak ulang dengan
-grep). Sembilan perbaikan: tiga P1 (shell parser, inspeksi argumen
-rekursif, SSRF), tiga P2 (packaging, HUD threading/lock/atomic,
-clear-history + skema config), tiga P3 (tombol suara mati, indikator
-loading intel, bersih-bersih dokumen).
+Revision on Argon's audit of v2.6.1 (researched and corrected by Ciel;
+Argon's line numbers were not used — every finding was re-located with
+grep). Nine fixes: three P1 (shell parser, recursive argument
+inspection, SSRF), three P2 (packaging, HUD threading/locking/atomic
+writes, clear-history + config schema), three P3 (dead sound button,
+intel loading indicator, documentation cleanup).
 
-### Keamanan — diperbaiki
+### Security — fixed
 
-- **Parser shell: subshell/backtick/baris baru tidak lagi memecah
-  pemeriksaan.** `$(...)` dan `` `...` `` kini dilacak (pemisah di
-  dalamnya tidak memecah segmen), dan `\n` menjadi pemisah — jadi
-  `$(curl ... | sh)` dan `echo ok\nrm -rf /tmp/x` tidak lolos lagi
-  lewat fragmentasi. `python -c` berbahaya kini terdeteksi juga
-  lewat `python3.11`, path absolut, dan flag gabungan
+- **Shell parser: subshells/backticks/newlines no longer fragment the
+  check.** `$(...)` and `` `...` `` are now tracked (separators inside
+  them no longer split segments), and `\n` is a separator — so
+  `$(curl ... | sh)` and `echo ok\nrm -rf /tmp/x` no longer slip
+  through fragmentation. Dangerous `python -c` is now also detected
+  via `python3.11`, absolute paths, and combined flags
   (`python3 -u -c`, `python3 -X utf8 -c`); `from os import system`
-  ikut diblokir.
-- **Pola RCE kini cocok untuk `rm -rf` ke path absolut apa pun**
+  is blocked too.
+- **The RCE pattern now matches `rm -rf` to any absolute path**
   (`rm -rf /tmp/x`, `rm -rf /`, `rm -fr`, `rm -r -f`, `--recursive
-  --force`, plus bentuk `$(rm -rf /)` dan backtick). Sebelumnya
-  pola menuntut `/` diikuti spasi/akhir/`*`, jadi `/tmp/x` lolos.
-  Bentuk baru `sh $(curl ...)` / `` sh `curl ...` `` (dan `eval`)
-  juga diblokir.
-- **Inspeksi argumen kini rekursif.** Path kredensial di dalam
-  dict/list bersarang ikut diperiksa (dulu hanya top-level), dan
-  `~` di-expand sebelum canonicalization — `~/.../.hermes/auth.json`
-  tidak lolos lagi.
-- **SSRF: multicast + unspecified diblokir** (IPv4/IPv6, literal
-  maupun hasil DNS); URL diekstrak dengan tanda baca JSON di akhir
-  dibersihkan supaya host publik tidak terblokir gara-gara `},`;
-  `scp`/`rsync`/`ssh`/`nc`/`dig`/`nslookup` (dan `sftp`/`ftp`)
-  kini dihitung sebagai egress untuk taint gating.
+  --force`, plus `$(rm -rf /)` and backtick forms). Previously the
+  pattern demanded `/` followed by a space/end/`*`, so `/tmp/x`
+  slipped through. New `sh $(curl ...)` / `` sh `curl ...` `` (and
+  `eval`) forms are blocked too.
+- **Argument inspection is now recursive.** Credential paths inside
+  nested dicts/lists are checked (previously top-level only), and
+  `~` is expanded before canonicalization — `~/.../.hermes/auth.json`
+  no longer slips through.
+- **SSRF: multicast + unspecified blocked** (IPv4/IPv6, literal and
+  DNS-resolved); URLs are extracted with trailing JSON punctuation
+  stripped so a public host is not blocked because of `},`;
+  `scp`/`rsync`/`ssh`/`nc`/`dig`/`nslookup` (and `sftp`/`ftp`)
+  now count as egress for taint gating.
 
-### Diperbaiki
+### Fixed
 
-- **Packaging: `MANIFEST.in` + `data-files`.** sdist dan wheel kini
-  membawa `plugin.yaml` + aset desktop (`desktop/plugin.js`) +
-  honeypot decoy — diverifikasi dari isi arsip hasil build.
-- **HUD: `ThreadingHTTPServer`** (dulu single-threaded);
+- **Packaging: `MANIFEST.in` + `data-files`.** The sdist and wheel now
+  carry `plugin.yaml` + desktop assets (`desktop/plugin.js`) +
+  honeypot decoys — verified from the contents of the built archives.
+- **HUD: `ThreadingHTTPServer`** (was single-threaded);
   `reload_state()`/`_save_events()`/`_save_scan_state()`/
-  `clear_all_history()` kini memakai lock yang sudah ada; tulis
-  state atomik (temp + rename).
-- **"Hapus riwayat" kini juga menghapus temuan pindai**
-  (`scan_findings` + `scan_state.json`), sesuai yang sudah dijanjikan
-  README. Strategi `MANAS-CALLID-RACE` di katalog diubah dari
-  `SYNTHESIZE_PATCH` menjadi `HARD_BLOCK` (sesuai perilaku nyata).
-  Lima kunci config R3 ditambahkan ke `plugin.yaml`
+  `clear_all_history()` now use the existing lock; state writes are
+  atomic (temp file + rename).
+- **"Clear history" now also deletes scan findings**
+  (`scan_findings` + `scan_state.json`), as the README already
+  promised. The `MANAS-CALLID-RACE` strategy in the catalog changed
+  from `SYNTHESIZE_PATCH` to `HARD_BLOCK` (matching real behaviour).
+  Five R3 config keys were added to `plugin.yaml`
   (`taint_ttl_minutes`, `ssrf_allowlist`, `callid_race_window_s`,
   `callid_race_enabled`, `hud_auth_token`).
-- **Tombol Suara dihapus.** Tombol itu mati (hanya membalik
-  `localStorage`; tidak ada audio apa pun di HUD) — dihapus beserta
-  kunci i18n-nya daripada dipertahankan sebagai pajangan.
-- **Tombol Perbarui intel kini menunjukkan status loading**
-  (nonaktif + label "Memperbarui intel…" selama fetch berjalan).
-- **Dokumen dibersihkan:** klaim "8 eksperimental + 2 planned"
-  dihapus (10/10 enforced sejak v2.6.0); kontradiksi CSRF/rate-limit
-  diluruskan (CSRF + rate limit + token auth opt-in memang aktif);
-  teks SSRF fail-open yang basi dihapus dari README, komentar kode,
-  dan penjelasan aturan; `CONTRIBUTING.md` kini menyebut jumlah tes
-  yang sebenarnya.
+- **Sound button removed.** The button was dead (it only flipped
+  `localStorage`; there is no audio at all in the HUD) — removed
+  together with its i18n keys rather than kept as decoration.
+- **The "Refresh intel" button now shows a loading state**
+  (disabled + "Updating intel…" label while the fetch runs).
+- **Documentation cleaned up:** the "8 experimental + 2 planned"
+  claim removed (10/10 enforced since v2.6.0); CSRF/rate-limit
+  contradictions straightened out (CSRF + rate limit + opt-in token
+  auth are indeed active); stale SSRF fail-open text removed from
+  the README, code comments, and rule explanations; `CONTRIBUTING.md`
+  now states the real test count.
 
 ## [2.6.1-alpha] — 2026-11-09
 
-Revisi kecil atas keluhan MyLord (screenshot HUD): kartu Skor Postur
-muncul di SEMUA tab dan terlalu makan ruang.
+Small revision on MyLord's complaint (HUD screenshot): the Posture
+Score card appeared on EVERY tab and took too much space.
 
-### Diperbaiki
+### Fixed
 
-- **Kartu Skor Postur kini hanya di tab Activity.** Akar masalah: kartu
-  dirender di alur `<main>` bersama sebelum panel-panel tab, jadi
-  pengalih tab (yang hanya menyembunyikan `.panel`) tidak pernah
-  menyembunyikannya. Kartu dipindah ke dalam panel `tab-act`.
-- **Kartu diubah jadi box minimalis (`.posture-mini`).** Skor 44px +
-  lima baris penuh diganti satu baris ringkas: skor 26px + grade di
-  kiri, lima komponen sebagai chip kecil (label + bar 70px + nilai)
-  di kanan. Padding 12px, tinggi total jauh lebih kecil.
-- **Semua konten Activity kini di dalam tab-nya sendiri.** KPI, garis
-  history, kartu "Yang dipantau", dan kartu "Pindai" juga dipindah ke
-  dalam panel Activity (sebelumnya di alur bersama, jadi ganti tab
-  tidak mengubah apa-apa di layar). Tiap tab kini menampilkan konten
-  yang sepenuhnya berbeda.
-- **Transisi fade 180ms** saat panel aktif berganti (naik 4px + fade),
-  supaya perpindahan tab tidak terasa kaku.
+- **The Posture Score card is now only on the Activity tab.** Root
+  cause: the card was rendered in the shared `<main>` flow before the
+  tab panels, so the tab switcher (which only hides `.panel`) never
+  hid it. The card moved inside the `tab-act` panel.
+- **The card became a minimal box (`.posture-mini`).** A 44px score +
+  five full rows became one compact row: 26px score + grade on the
+  left, five components as small chips (label + 70px bar + value) on
+  the right. Padding 12px, much smaller total height.
+- **All Activity content is now inside its own tab.** KPIs, history
+  lines, the "What is monitored" card, and the "Scan" card also moved
+  into the Activity panel (previously in the shared flow, so switching
+  tabs changed nothing on screen). Each tab now shows fully different
+  content.
+- **180ms fade transition** when the active panel changes (rise 4px +
+  fade), so tab switching no longer feels stiff.
 
-### Catatan
+### Notes
 
-- Tes: unit + kontrak 61/61, e2e R3 26/26, e2e posture-mini 17/17.
+- Tests: unit + contract 61/61, e2e R3 26/26, e2e posture-mini 17/17.
 
 ## [2.6.0-alpha] — 2026-11-09
 
-Revisi R3 (atas perintah MyLord: "Gimana skor nya dibuat 10 semuanya"
-+ "aku butuh guard terbaik diantara mereka semua"). Sepuluh fitur
-untuk menutup celah enforcement yang dibuktikan oleh verdict REVISI.txt
-dan riset kompetitor (llm-antidote ~82, blackbox ~78). Dimensi maturity
-tetap jujur di 7–8: PR katalog #151504 harus di-merge Nous + pengguna
-nyata dulu — itu di luar kendali kode.
+R3 revision (on MyLord's order: "How do we make the score 10 in
+everything" + "I need the best guard among all of them"). Ten
+features to close the enforcement gaps proven by the REVISI.txt
+verdict and competitor research (llm-antidote ~82, blackbox ~78).
+The maturity dimension stays honestly at 7–8: catalog PR #151504
+must be merged by Nous + real users first — that is outside the
+code's control.
 
-### Ditambahkan
+### Added
 
-- **Taint tracking (per sesi).** Akses berkas kredensial (deceived ke
-  honeypot atau diblokir) menandai sesi sebagai tainted (TTL 60 menit,
-  hanya di memori); egress berikutnya dari sesi yang sama di-hard-block
-  (MANAS-CRED-HONEYPOT). Simulasi tidak menandai taint.
-- **Parser shell nyata** menggantikan regex untuk perintah berantai:
-  pemisah `;` `&&` `||` `|` `&` (hormat quote + escape); tiap segmen
-  diperiksa sendiri — `python -c` berbahaya diblokir per segmen,
-  subcommand git ditulis ulang per segmen.
-- **SSRF fail-closed + allowlist.** DNS yang gagal kini memblokir
-  (dulu: dianggap SAFE). `ssrf_allowlist` di konfigurasi mengecualikan
-  host bernama.
-- **MANAS-SYMLINK-GUARD enforced.** Argumen dikanonikalisasi
-  (`Path.resolve`); baca yang mengarah ke berkas terlindungi
-  dialihkan ke decoy honeypot. Status planned → experimental.
-- **MANAS-CALLID-RACE enforced.** Pemanggilan runtime identik
-  (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block.
-  Status planned → experimental. Jendela bisa dikonfigurasi
-  (`callid_race_window_s`). Simulasi dikecualikan.
-- **Posture Score (0–100 + grade A–F)** di HUD: aturan 25 +
-  enforcement 25 + hygiene 20 + intelijen 15 + aktivitas 15.
-- **Guard Arena.** 10 skenario serangan (teks saja, tidak dieksekusi)
-  dijalankan pada core sekali pakai lewat jalur enforcement runtime;
-  hasil tersimpan (`arena_last.json`) dan tampil di tab Arena.
-- **Audit time-travel.** Pemeriksaan ulang event runtime tersimpan:
-  event yang baru akan tertangkap oleh mekanisme R3 ditandai
-  "newly caught". Audit berbasis pola atas evidence tersimpan
-  (bukan replay penuh — telemetri tidak menyimpan event "allow").
-- **Pengamanan HUD.** CSRF token di semua POST (header
-  `X-CSRF-Token`); rate limit 20 POST/IP/60 detik (HTTP 429);
-  token auth opt-in (`hud_auth_token`) + halaman login + cookie
-  sesi HttpOnly 24 jam (default mati — HUD loopback-only di iframe
-  Desktop).
-- **CI + contract test + coverage gate.** `.github/workflows/ci.yml`
-  (Python 3.11/3.12): unit + contract test, coverage gate 70%
-  (terukur 79% di v2.6.0). `tests/test_contract.py`: versi
-  plugin.yaml == pyproject == codename, field katalog wajib,
-  `register()` mendaftarkan semua hook + tool yang dideklarasikan,
-  HUD render, konstanta hardening, nol dependensi non-stdlib.
+- **Taint tracking (per session).** A credential-file access (deceived
+  to the honeypot or blocked) marks the session as tainted (60-minute
+  TTL, in-memory only); the next egress from the same session is
+  hard-blocked (MANAS-CRED-HONEYPOT). Simulation never marks taint.
+- **A real shell parser** replaces regex for chained commands:
+  separators `;` `&&` `||` `|` `&` (respecting quotes + escapes);
+  each segment is checked on its own — dangerous `python -c` is
+  blocked per segment, git subcommands are rewritten per segment.
+- **SSRF fail-closed + allowlist.** A failed DNS now blocks (was:
+  treated as SAFE). `ssrf_allowlist` in configuration exempts named
+  hosts.
+- **MANAS-SYMLINK-GUARD enforced.** Arguments are canonicalized
+  (`Path.resolve`); reads pointing at protected files are redirected
+  to the honeypot decoy. Status planned → experimental.
+- **MANAS-CALLID-RACE enforced.** Identical runtime calls (session +
+  tool + same argument hash) within 10 seconds are hard-blocked.
+  Status planned → experimental. The window is configurable
+  (`callid_race_window_s`). Simulation is exempt.
+- **Posture Score (0–100 + grade A–F)** in the HUD: rules 25 +
+  enforcement 25 + hygiene 20 + intelligence 15 + activity 15.
+- **Guard Arena.** 10 attack scenarios (text only, never executed)
+  run on a disposable core through the runtime enforcement path;
+  results stored (`arena_last.json`) and shown in the Arena tab.
+- **Time-travel audit.** Re-check of stored runtime events: events
+  that would only now be caught by the R3 mechanisms are marked
+  "newly caught". A pattern-based audit over stored evidence (not a
+  full replay — telemetry does not store "allow" events).
+- **HUD hardening.** CSRF token on all POSTs (header
+  `X-CSRF-Token`); rate limit 20 POST/IP/60 seconds (HTTP 429);
+  opt-in token auth (`hud_auth_token`) + login page + 24-hour
+  HttpOnly session cookie (off by default — the HUD is loopback-only
+  inside the Desktop iframe).
+- **CI + contract tests + coverage gate.** `.github/workflows/ci.yml`
+  (Python 3.11/3.12): unit + contract tests, 70% coverage gate
+  (measured 79% in v2.6.0). `tests/test_contract.py`: plugin.yaml
+  version == pyproject == codename, required catalog fields,
+  `register()` registers all declared hooks + tools, HUD render,
+  hardening constants, zero non-stdlib dependencies.
 
-### Diubah
+### Changed
 
-- **Ke-10 aturan kini experimental** (tidak ada lagi planned).
-  `rules_enforced` di posture: 8 → 10.
-- **i18n: 159 → 180 kunci** per bahasa (21 kunci baru: posture 6 +
-  arena 11 + time-travel 4), 15 bahasa lengkap, 0 mismatch.
-- **Penjelasan aturan (RULE_EXPLAIN)** untuk SYMLINK-GUARD,
-  CALLID-RACE, dan SHELL-RCE diperbarui ke status enforcement R3.
-- **README:** tabel bypass diperbarui (git chaining, `python -c`,
-  SSRF fail-open, symlink — semua sudah diperbaiki); seksi baru
-  Skor postur / Arena / time-travel / pengamanan HUD.
+- **All 10 rules are now experimental** (no more planned).
+  `rules_enforced` in posture: 8 → 10.
+- **i18n: 159 → 180 keys** per language (21 new keys: posture 6 +
+  arena 11 + time-travel 4), 15 languages complete, 0 mismatch.
+- **Rule explanations (RULE_EXPLAIN)** for SYMLINK-GUARD,
+  CALLID-RACE, and SHELL-RCE updated to R3 enforcement status.
+- **README:** bypass table updated (git chaining, `python -c`,
+  SSRF fail-open, symlink — all fixed); new Posture Score / Arena /
+  time-travel / HUD hardening sections.
 
-### Diperbaiki
+### Fixed
 
-- **Sub-jumlah simulasi** kini memakai pencocokan substring yang
-  sama dengan ringkasan (sudah benar sejak R2.5.1; tes R3 mengunci
-  nilai (4, 2, 1) = 7 event dari 6 input barrage).
-- **`get_last_simulation()`** tidak lagi memotong run di 6 event —
-  satu input bisa menghasilkan beberapa event (vektor git kini
-  menghasilkan 2 modify).
+- **Simulation sub-counts** now use the same substring matching as
+  the summary (correct since R2.5.1; R3 tests lock the value
+  (4, 2, 1) = 7 events from 6 barrage inputs).
+- **`get_last_simulation()`** no longer cuts a run at 6 events —
+  one input can produce several events (the git vector now produces
+  2 modifies).
 
-### Tes
+### Tests
 
-- **Unit + contract: 61/61 lulus** — 38 lama + 16 baru R3 (taint,
-  parser shell, SSRF fail-closed + allowlist, symlink, call-ID race,
-  posture score, arena 10/10, time-travel, CSRF/posture/arena di
-  HUD, key count 180) + 7 tes kontrak.
-- **E2E HTTP nyata: 26/26 lulus** (`/tmp/e2e-r3.py`): CSRF 403/200,
-  arena 10/10, time-travel, barrage 6 hasil, rate limit 429 di POST
-  ke-21, token auth (login 401/302 + cookie sesi + HUD 200).
-- **Cakupan: 79%** (core 80%, i18n 100%, threat_intel 86%).
+- **Unit + contract: 61/61 passed** — 38 old + 16 new R3 (taint,
+  shell parser, SSRF fail-closed + allowlist, symlink, call-ID race,
+  posture score, arena 10/10, time-travel, CSRF/posture/arena in the
+  HUD, key count 180) + 7 contract tests.
+- **Real-HTTP e2e: 26/26 passed** (`/tmp/e2e-r3.py`): CSRF 403/200,
+  arena 10/10, time-travel, barrage 6 results, rate limit 429 on the
+  21st POST, token auth (login 401/302 + session cookie + HUD 200).
+- **Coverage: 79%** (core 80%, i18n 100%, threat_intel 86%).
 
-### Catatan jujur
+### Honest notes
 
-- **Maturity tetap 7–8, bukan 10.** PR katalog harus di-merge dan
-  pengguna nyata harus memakai plugin ini dulu.
-- **Packaging (wheel/sdist membawa plugin.yaml + aset desktop)**
-  masih terbuka dari Fase R2 — belum masuk 10 fitur R3.
-- **Arena skenario `arena-ssrf-dns-fail` dihapus** dari 10 skenario
-  (tidak deterministik: DNS di VM selalu ter-resolve lewat proxy
-  egress ke 198.18.x.x); fail-closed diuji oleh unit test dengan
-  `socket.getaddrinfo` yang di-mock.
-- **Terjemahan 21 kunci baru × 13 bahasa non-en/id** ditulis Ciel
-  (bukan penutur asli) — pola yang sama seperti R2.5.2.
+- **Maturity stays 7–8, not 10.** The catalog PR must be merged and
+  real users must use this plugin first.
+- **Packaging (wheel/sdist carrying plugin.yaml + desktop assets)**
+  still open from Phase R2 — not one of the 10 R3 features.
+- **Arena scenario `arena-ssrf-dns-fail` removed** from the 10
+  scenarios (not deterministic: DNS in the VM always resolves via
+  the egress proxy to 198.18.x.x); fail-closed is tested by a unit
+  test with a mocked `socket.getaddrinfo`.
+- **Translations of 21 new keys × 13 non-en/id languages** written by
+  Ciel (not a native speaker) — same pattern as R2.5.2.
 
 ## [2.5.2-alpha] — 2026-11-09
 
-Revisi R2.5.2 (atas laporan MyLord: fitur bahasa bagus tapi tidak
-merata — mode English, tab Findings masih berbahasa Indonesia, dan
-sebaliknya). Empat sumber ketidakmerataan, semua diperbaiki.
+R2.5.2 revision (on MyLord's report: the language feature is good but
+not even — in English mode, the Findings tab still showed Indonesian,
+and vice versa). Four sources of unevenness, all fixed.
 
-### Diperbaiki
+### Fixed
 
-- **Judul + detail temuan pindai masih hardcode Indonesia.** 15
-  judul + 15 detail temuan (di `run_scan` dan `_scan_filesystem`)
-  kini disimpan berbasis kunci (`title_key`/`detail_key`/`params`)
-  dan dirender per bahasa di HUD. Teks Inggris disimpan sebagai
-  fallback yang terbaca di JSON mentah. Total kunci i18n: 115 →
-  **159** (41 kunci temuan/pemeriksaan/berkas/level + 3 kata
-  severity NVD).
-- **Header "File" hardcode Inggris.** Kini kunci `findings_file`
-  ("File" / "Berkas" / dst. di 15 bahasa).
-- **Nama pemeriksaan = ID Inggris mentah.** Kini label terjemahan
+- **Scan finding titles + details were hardcoded Indonesian.** 15
+  finding titles + 15 details (in `run_scan` and `_scan_filesystem`)
+  are now stored key-based (`title_key`/`detail_key`/`params`) and
+  rendered per language in the HUD. English text is stored as a
+  readable fallback in the raw JSON. Total i18n keys: 115 →
+  **159** (41 finding/check/file/level keys + 3 NVD severity words).
+- **"File" header hardcoded English.** Now the `findings_file` key
+  ("File" / "Berkas" / etc. in 15 languages).
+- **Check names = raw English IDs.** Now translated labels
   (`check_config_integrity` → "Config integrity" / "Integritas
-  konfigurasi", dst. untuk 9 pemeriksaan).
-- **Label level intel = data Inggris mentah.** Level CISA
-  "Actively exploited" dan level NVD "9.8 CRITICAL" kini
-  diterjemahkan (skor angka dipertahankan, kata severity
-  diterjemahkan: "9.8 Kritis" / "7.5 Tinggi" / "5.0 Sedang" /
+  konfigurasi", etc. for 9 checks).
+- **Intel level labels = raw English data.** The CISA level
+  "Actively exploited" and NVD levels "9.8 CRITICAL" are now
+  translated (the numeric score is kept, the severity word is
+  translated: "9.8 Kritis" / "7.5 Tinggi" / "5.0 Sedang" /
   "2.1 Rendah").
-- **Temuan lama (37 baris) ikut bermigrasi.** Temuan tersimpan
-  sebelum v2.5.2 (judul Indonesia, tanpa kunci) dipetakan saat
-  dimuat (`_migrate_old_finding`, 15 pola judul) sehingga ikut
-  tampil dalam bahasa HUD — bukan tetap Indonesia.
-- **Sel temuan menampilkan judul + detail.** Kolom Detail kini
-  menampilkan judul temuan (tebal) + detail (redup) — sebelumnya
-  hanya detail, jadi judul tidak pernah terlihat.
+- **Old findings (37 rows) migrated too.** Findings stored before
+  v2.5.2 (Indonesian titles, no keys) are mapped on load
+  (`_migrate_old_finding`, 15 title patterns) so they also show in
+  the HUD language — not stuck in Indonesian.
+- **A finding cell shows title + detail.** The Detail column now
+  shows the finding title (bold) + detail (dimmed) — previously only
+  the detail, so the title was never visible.
 
-### Catatan
+### Notes
 
-- Terjemahan untuk 13 bahasa selain en/id ditulis Ciel (bukan
-  penutur asli) — sama seperti kunci i18n sebelumnya.
-- **Unit test: 38/38 lulus** — 33 lama + 5 baru R2.5.2 (kelengkapan
-  159 kunci, render temuan penuh en+id tanpa bocor silang, migrasi
-  temuan lama, label level intel, kunci+fallback Inggris).
-  **E2E: 32/32 lulus** (HTTP nyata: render temuan en+id, header
-  Berkas/File, nama pemeriksaan, migrasi, level intel).
+- Translations for 13 languages besides en/id written by Ciel (not a
+  native speaker) — same as previous i18n keys.
+- **Unit tests: 38/38 passed** — 33 old + 5 new R2.5.2 (159-key
+  completeness, full en+id finding rendering with no cross-leak,
+  old-finding migration, intel level labels, key+English fallback).
+  **E2E: 32/32 passed** (real HTTP: en+id finding rendering,
+  Berkas/File header, check names, migration, intel levels).
 
 ## [2.5.1-alpha] — 2026-11-09
 
-Revisi R2.5.1 (atas laporan MyLord + screenshot: simulasi sudah
-dijalankan tapi kartu KPI tetap 0; pindai Quick Scan "tidak masuk
-ke browse/library"). Dua bug + satu integrasi yang belum terbukti.
+R2.5.1 revision (on MyLord's report + screenshot: the simulation had
+already run but the KPI cards still showed 0; Quick Scan "didn't go
+into browse/library"). Two bugs + one integration not yet proven.
 
-### Diperbaiki
+### Fixed
 
-- **Sub-jumlah simulasi 0/0/0 (BUG).** Kartu KPI menghitung sub-jumlah
-  simulasi dengan pencocokan persis (`verdict == "BLOCK"`), padahal
-  string verdict sebenarnya adalah `"HARD_BLOCK"`,
-  `"SYNTHESIZED_PATCH (Modify Args)"`, dan
-  `"HONEYPOT_DECEIVED (Modify Args)"`. Hasilnya: 12 event simulasi
-  MyLord (8 blocked, 2 modified, 2 deceived) terbaca 0/0/0.
-  Sekarang memakai pencocokan substring yang sama seperti
-  `get_last_simulation()` dan counter posture (`"BLOCK" in verdict`).
-  Ringkasan "Last simulation" sudah benar dari dulu (pakai substring)
-  — hanya sub-jumlah per kartu yang salah.
-- **Pindai tidak membawa ke hasil (UX).** Sesudah Quick/Full/Network
-  Scan, halaman hanya me-reload di tab Activity, jadi temuan
-  tersembunyi di tab Findings dan MyLord mengira pindai tidak jalan.
-  Sekarang sesudah pindai sukses, halaman pindah ke tab Findings
-  (`?tab=find`, dipertahankan di URL; server me-render tab yang
-  diminta, fallback ke Activity bila param tidak dikenal).
-  Pencarian tetap di tab Activity (hidden input `tab=act`).
+- **Simulation sub-counts 0/0/0 (BUG).** The KPI cards computed
+  simulation sub-counts with exact matching (`verdict == "BLOCK"`),
+  but the real verdict strings are `"HARD_BLOCK"`,
+  `"SYNTHESIZED_PATCH (Modify Args)"`, and
+  `"HONEYPOT_DECEIVED (Modify Args)"`. Result: MyLord's 12 simulation
+  events (8 blocked, 2 modified, 2 deceived) read as 0/0/0.
+  Now uses the same substring matching as `get_last_simulation()`
+  and the posture counter (`"BLOCK" in verdict`). The "Last
+  simulation" summary was already correct (substring matching) — only
+  the per-card sub-counts were wrong.
+- **Scans not leading to results (UX).** After a Quick/Full/Network
+  scan, the page only reloaded on the Activity tab, so findings were
+  hidden in the Findings tab and MyLord thought the scan had not run.
+  Now after a successful scan the page moves to the Findings tab
+  (`?tab=find`, kept in the URL; the server renders the requested
+  tab, falling back to Activity for an unknown parameter). Search
+  stays on the Activity tab (hidden input `tab=act`).
 
-### Ditambah
+### Added
 
-- **Jalur data real terbukti.** `intercept_tool_call` punya
-  `event_source="runtime"` (default) — jalur yang sama dipakai
-  Hermes saat agen benar-benar memanggil tool. Diuji langsung di
-  PC (bukan simulasi): 1 panggilan shell destruktif diblokir
-  (HARD_BLOCK), 1 argumen dimodifikasi, 1 kredensial dialihkan ke
-  honeypot. Ketiganya tercatat sebagai event REAL (source=runtime)
-  dan menaikkan kartu KPI. Data real selanjutnya muncul otomatis
-  setiap agen Hermes memanggil tool — plugin tidak bisa
-  "mendeteksi" tool yang tidak pernah dipanggil.
-- **Integrasi antar-proses (reload_state).** Server HUD adalah
-  proses berumur panjang, tapi event juga ditulis proses lain
-  (agen Hermes yang mencegat tool real, pindai dari sesi lain).
-  Sebelumnya HUD hanya memuat state saat startup — event real
-  dari proses lain tidak muncul sampai server di-restart (terbukti
-  saat uji intercept real: 3 event real tertulis ke file, HUD
-  tetap menampilkan 12). Kini `core.reload_state()` dipanggil di
-  setiap GET, jadi halaman selalu mencerminkan isi disk.
-- **Unit test: 33/28 lulus** — 28 lama + 5 baru R2.5.1 (sub-jumlah
-  sim dengan string verdict asli incl. reproduksi telemetri MyLord
-  12 event → 8/2/2, param tab, redirect pindai, reload_state
-  antar-proses). **E2E: 21/21 lulus** (HTTP nyata: sub-jumlah sim
-  non-nol + jumlah 6, tab=find, pindai → Findings, intercept real
-  → counter real > 0, proses kedua menulis event → HUD menampilkannya
-  tanpa restart).
+- **Real-data path proven.** `intercept_tool_call` has
+  `event_source="runtime"` (the default) — the same path Hermes uses
+  when an agent actually calls a tool. Tested directly on the PC (not
+  a simulation): 1 destructive shell call blocked (HARD_BLOCK), 1
+  argument modified, 1 credential redirected to the honeypot. All
+  three were recorded as REAL events (source=runtime) and raised the
+  KPI cards. Further real data appears automatically whenever a Hermes
+  agent calls a tool — the plugin cannot "detect" a tool that is never
+  called.
+- **Cross-process integration (reload_state).** The HUD server is a
+  long-lived process, but events are also written by other processes
+  (a Hermes agent intercepting real tools, scans from another
+  session). Previously the HUD only loaded state at startup — real
+  events from another process did not appear until the server was
+  restarted (proven during the real-intercept test: 3 real events
+  written to file, HUD still showing 12). Now `core.reload_state()`
+  is called on every GET, so the page always reflects what is on disk.
+- **Unit tests: 33/33 passed** — 28 old + 5 new R2.5.1 (simulation
+  sub-counts with real verdict strings incl. reproduction of MyLord's
+  telemetry 12 events → 8/2/2, tab parameter, scan redirect,
+  cross-process reload_state). **E2E: 21/21 passed** (real HTTP:
+  non-zero simulation sub-counts totalling 6, tab=find, scan →
+  Findings, real intercept → real counter > 0, second process writing
+  an event → HUD showing it without a restart).
 
 ## [2.5.0-alpha] — 2026-11-09
 
-Revisi R2.5 (atas perintah MyLord: "UI-UX nya jangan AI SLOP lah,
-cari design nya di figma atau apa gitu, pake yang profesional" +
-"tambahin tema gelap sama terang"): HUD didesain ulang dari sistem
-desain dashboard CISO C3iHub (IIT Kanpur, 2024 — platform keamanan
-enterprise yang benar-benar dikirim ke klien, bukan konsep Dribbble),
-plus tema gelap + terang. **Fungsi tidak berubah** — yang berubah
-hanya lapisan visual (warna, tipografi, layout, ikon).
+R2.5 revision (on MyLord's order: "UI-UX shouldn't be AI slop, go look
+for a design on Figma or somewhere, use a professional one" + "add dark
+and light themes"): the HUD was redesigned from the C3iHub CISO
+dashboard design system (IIT Kanpur, 2024 — an enterprise security
+platform actually shipped to clients, not a Dribbble concept), plus
+dark + light themes. **Function did not change** — only the visual
+layer changed (colours, typography, layout, icons).
 
-### Ditambah
+### Added
 
-- **Tema gelap + terang.** Tombol tema di kanan atas (ikon matahari/
-  bulan, Lucide SVG). Pilihan tersimpan di browser
-  (`localStorage 'manas-aegis-theme'`) dan diterapkan sebelum
-  halaman pertama kali digambar (tanpa kedip). Default: gelap.
-  Tema terang memakai token yang sama (hue severity sama, digelapkan
-  agar kontras di latar putih; biru aksi tetap #0168FF).
-- **Ikon SVG profesional (Lucide, ISC).** Semua ikon emoji di HUD
-  (🔊 ▶ 🔍 ◆) diganti SVG inline (shield, activity, search, play,
-  volume, refresh, scan, trash, sun, moon — grid 24px, stroke 2,
-  currentColor), sesuai standing order ikon MyLord.
+- **Dark + light themes.** Theme button at top right (sun/moon icon,
+  Lucide SVG). Choice stored in the browser (`localStorage
+  'manas-aegis-theme'`) and applied before first paint (no flash).
+  Default: dark. The light theme uses the same tokens (same severity
+  hues, darkened for contrast on white; action blue stays #0168FF).
+- **Professional SVG icons (Lucide, ISC).** All emoji icons in the HUD
+  (🔊 ▶ 🔍 ◆) replaced with inline SVG (shield, activity, search,
+  play, volume, refresh, scan, trash, sun, moon — 24px grid, stroke 2,
+  currentColor), per MyLord's standing icon order.
 
-### Diubah
+### Changed
 
-- **Sistem desain baru (referensi: CISO dashboard C3iHub).**
-  Halaman slate gelap #2A2C38, kartu #1E1F27, sidebar #1F1F3B,
-  biru aksi #0168FF, nav terpilih #2F2263. Satu skala severity di
-  semua tempat: Critical #F53821, High #FF9B10, Medium #FFCE20,
-  Low #00D796, Informative #80CAFF — dipakai di kartu KPI (garis
-  aksen kiri), badge sumber, badge severity temuan, dan badge level
-  intel. Warna kuat hanya untuk hal yang bermakna; biru hanya
-  untuk aksi.
-- **Tipografi profesional.** UI memakai sans-serif sistem (Inter/
-  Segoe UI); monospace hanya untuk nilai data (timestamp, ID,
-  evidence). Neon cyan (#00f5d4) dan latar hitam pekat (#040811)
-  dihapus — keduanya ciri khas "dashboard AI generik".
-- **Layout sidebar.** Navigasi (Activity / Threat intel / Findings)
-  pindah ke sidebar kiri tetap (seperti dashboard SOC sungguhan);
-  konten utama max-width 1120px. Di layar sempit (<760px) sidebar
-  runtuh jadi bar atas. Tabel dibungkus kartu (radius + border),
-  header huruf kapital kecil, baris hover, badge severity dengan
-  titik + label (bukan warna saja — aksesibel untuk buta warna).
-- **Unit test: 28/28 lulus** (6 V22 + 6 R1 + 11 R2 + 5 R2.5 baru).
-  **E2E: 36/36 lulus** (HTTP nyata: tema + desain + semua alur R2).
+- **New design system (reference: C3iHub CISO dashboard).**
+  Dark slate page #2A2C38, cards #1E1F27, sidebar #1F1F3B, action
+  blue #0168FF, selected nav #2F2263. One severity scale everywhere:
+  Critical #F53821, High #FF9B10, Medium #FFCE20, Low #00D796,
+  Informative #80CAFF — used on KPI cards (left accent line), source
+  badges, finding severity badges, and intel level badges. Strong
+  colours only for meaningful things; blue only for actions.
+- **Professional typography.** The UI uses system sans-serif (Inter/
+  Segoe UI); monospace only for data values (timestamps, IDs,
+  evidence). Neon cyan (#00f5d4) and deep black background (#040811)
+  removed — both hallmarks of a "generic AI dashboard".
+- **Sidebar layout.** Navigation (Activity / Threat intel / Findings)
+  moved to a fixed left sidebar (like a real SOC dashboard);
+  main content max-width 1120px. On narrow screens (<760px) the
+  sidebar collapses to a top bar. Tables wrapped in cards (radius +
+  border), small-caps headers, row hover, severity badges with dot +
+  label (not colour alone — accessible for colour blindness).
+- **Unit tests: 28/28 passed** (6 V22 + 6 R1 + 11 R2 + 5 new R2.5).
+  **E2E: 36/36 passed** (real HTTP: themes + design + all R2 flows).
 
 ## [2.4.0-alpha] — 2026-11-09
 
-Revisi Fase R2 (atas permintaan MyLord, satu per satu dari chat):
-i18n HUD (Inggris default, 15 bahasa), simulasi yang terlihat
-persisten, aturan khusus yang bisa ditambah/diedit pengguna, pindai
-(quick/full/network) + tab Temuan, riwayat tanpa batas + pencarian,
-empty state yang kaya informasi, dan intelijen ancaman global
-real-time + kolom penjelasan awam/profesional. **Keputusan guard
-(blokir/ubah) tidak berubah** — yang berubah adalah bahasa,
-visibilitas, dan alat bantu di sekitarnya, bukan logika pemblokiran.
+Phase R2 revision (on MyLord's requests, one by one from chat):
+HUD i18n (English default, 15 languages), persistent visible
+simulation, user-addable/editable custom rules, scans (quick/full/
+network) + Findings tab, unlimited history + search, information-rich
+empty state, and real-time global threat intelligence + lay/professional
+explanation column. **Guard decisions (block/modify) did not change** —
+what changed was language, visibility, and the tools around them, not
+the blocking logic.
 
-### Ditambah
+### Added
 
-- **i18n HUD (15 bahasa, Inggris default).** `hermes_manas_aegis/i18n.py`:
-  Inggris, Indonesia, Spanyol, Prancis, Jerman, Portugis, Italia,
-  Rusia, Turki, Arab, Hindi, Tionghoa, Jepang, Korea, Vietnam.
-  Menu bahasa di kanan atas HUD; pilihan tersimpan di browser;
-  `?lang=` di URL juga didukung; bahasa tak dikenal jatuh ke Inggris.
-  Nama aturan, ID advisori, dan CWE tidak diterjemahkan.
-  Penjelasan awam/profesional tersedia dalam Inggris + Indonesia,
-  bahasa lain menampilkan penjelasan Inggris.
-- **Simulasi terlihat persisten.** Ringkasan simulasi terakhir
-  (waktu, berapa dari 6 contoh yang cocok, berapa diblokir/diubah/
-  dialihkan) kini tersimpan dan tampil di HUD — tidak lagi hilang
-  saat halaman dimuat ulang. Setiap kartu KPI juga menampilkan
-  sub-jumlah simulasinya (`simulation: N`). Kartu besar tetap
-  menghitung **hanya aktivitas nyata** — simulasi tidak pernah
-  menggelembungkan angka nyata (itu ketidakjujuran v2.2.0 yang
-  diperbaiki R1 dan dipertahankan di sini).
-- **Aturan khusus (custom rules).** File
-  `~/.hermes/manas-aegis-custom-rules.json` (di home, bukan di
-  direktori plugin, supaya tidak ikut terhapus saat install ulang):
-  `rules[]` (aturan baru, `rule_id` harus diawali `CUSTOM-`) dan
-  `overrides{}` (mengganti pola utama MANAS-SQLI-AST,
-  MANAS-SHELL-RCE, MANAS-CONFIG-FIM, MANAS-MEM-FIREWALL).
-  Validasi penuh saat dimuat (regex harus bisa dikompilasi,
-  `test_positive`/`test_negative` harus lolos, override aturan
-  yang tidak dikenal ditolak); entri tidak valid ditolak dan
-  dicatat sebagai error — plugin tidak pernah mati karena file
-  aturan yang rusak. Aturan khusus yang valid benar-benar
-  dijalankan engine dan muncul di katalog HUD dengan badge "custom".
-- **Pindai (quick / full / network) + tab Temuan.**
-  Quick: integritas konfigurasi vs baseline persisten
-  (`cce_baseline.json`), decoy honeypot, validasi aturan khusus,
-  backstop telemetri, self-test aturan. Full: quick + pemindaian
-  isi file di `~/.hermes` (pola injeksi prompt, karakter zero-width,
-  secret di luar file kredensial yang dikenal, heuristik token bomb;
-  maks. 300 file / 1 MB per file; direktori plugin dilewati).
-  Network: **hanya** postur jaringan plugin sendiri (HUD loopback,
-  izin file state, postur SSRF) — **bukan** port scan dan **bukan**
-  pemindaian LAN/internet. Temuan tersimpan (`scan_state.json`,
-  maks. 50, duplikat digabung) dan tampil di tab Temuan — itulah
-  "notifikasi" plugin ini; tidak ada saluran push.
-- **Riwayat tanpa batas + pencarian.** Cap 120 event **dihapus**.
-  File live menyimpan 500 event terbaru (agar HUD cepat dimuat);
-  event yang lebih lama pindah ke arsip append-only
-  (`manas_telemetry_archive.jsonl`) yang tidak pernah dihapus
-  plugin — kecuali lewat "Hapus riwayat" (yang juga menghapus
-  arsip). Kotak pencarian di tab Aktivitas + endpoint
-  `/api/search?q=...` mencari riwayat live dan arsip.
-- **Empty state kaya informasi.** Saat belum ada aktivitas nyata,
-  panel kosong kini menampilkan versi, status koneksi, jumlah
-  aturan (eksperimental + khusus + terencana), aturan khusus,
-  simulasi terakhir, pindai terakhir, dan cara memunculkan
-  aktivitas — bukan sekadar satu kalimat.
-- **Intelijen ancaman global real-time.** Diambil otomatis dari
-  **CISA KEV** dan **NVD CVE API 2.0** (keduanya gratis, tanpa
-  kunci, resmi), cache lokal `threat_intel.json` (maks. 40 item),
-  refresh otomatis tiap 10 menit bila cache lebih tua dari 6 jam +
-  tombol "Perbarui intelijen". Tanpa internet, cache lama tetap
-  ditampilkan dan HUD menulis dengan jelas bahwa data mungkin
-  kedaluwarsa. Ditampilkan sebagai **kewaspadaan global** — plugin
-  TIDAK memeriksa apakah perangkat ini terdampak.
-- **Kolom Penjelasan di katalog aturan.** Setiap aturan punya
-  penjelasan dua tingkat: "Untuk semua orang" (bahasa awam) dan
-  "Untuk profesional keamanan" (pola/trigger dan batasnya).
+- **HUD i18n (15 languages, English default).** `hermes_manas_aegis/i18n.py`:
+  English, Indonesian, Spanish, French, German, Portuguese, Italian,
+  Russian, Turkish, Arabic, Hindi, Chinese, Japanese, Korean,
+  Vietnamese. Language menu at the top right of the HUD; choice stored
+  in the browser; `?lang=` in the URL also supported; unknown languages
+  fall back to English. Rule names, advisory IDs, and CWEs are not
+  translated. Lay/professional explanations are available in English +
+  Indonesian; other languages show the English explanation.
+- **Persistent visible simulation.** The last simulation summary
+  (time, how many of 6 examples matched, how many blocked/modified/
+  redirected) is now stored and shown in the HUD — no longer lost on
+  page reload. Each KPI card also shows its simulation sub-count
+  (`simulation: N`). The big cards still count **only real activity**
+  — simulation never inflates real numbers (that was a v2.2.0
+  dishonesty fixed in R1 and kept here).
+- **Custom rules.** File `~/.hermes/manas-aegis-custom-rules.json`
+  (in the home directory, not the plugin directory, so it is not
+  deleted on reinstall): `rules[]` (new rules, `rule_id` must start
+  with `CUSTOM-`) and `overrides{}` (replacing the main patterns of
+  MANAS-SQLI-AST, MANAS-SHELL-RCE, MANAS-CONFIG-FIM,
+  MANAS-MEM-FIREWALL). Full validation on load (regex must compile,
+  `test_positive`/`test_negative` must pass, overrides of unknown
+  rules are rejected); invalid entries are rejected and logged as
+  errors — the plugin never dies because of a broken rules file.
+  Valid custom rules really run in the engine and appear in the HUD
+  catalog with a "custom" badge.
+- **Scans (quick / full / network) + Findings tab.**
+  Quick: config integrity vs the persistent baseline
+  (`cce_baseline.json`), honeypot decoys, custom-rule validation,
+  telemetry backstop, rule self-test. Full: quick + content scan of
+  files in `~/.hermes` (prompt-injection patterns, zero-width
+  characters, secrets outside known credential files, token-bomb
+  heuristics; max. 300 files / 1 MB per file; plugin directories
+  skipped). Network: **only** the plugin's own network posture (HUD
+  loopback, state-file permissions, SSRF posture) — **not** a port
+  scan and **not** a LAN/internet scan. Findings are stored
+  (`scan_state.json`, max. 50, duplicates merged) and shown in the
+  Findings tab — that is this plugin's "notification"; there is no
+  push channel.
+- **Unlimited history + search.** The 120-event cap is **removed**.
+  The live file stores the newest 500 events (so the HUD loads fast);
+  older events move to an append-only archive
+  (`manas_telemetry_archive.jsonl`) that the plugin never deletes —
+  except via "Clear history" (which also deletes the archive). A
+  search box on the Activity tab + endpoint `/api/search?q=...`
+  searches live history and the archive.
+- **Information-rich empty state.** When there is no real activity
+  yet, the empty panel now shows the version, connection status,
+  rule count (experimental + custom + planned), custom rules, last
+  simulation, last scan, and how to produce activity — not just one
+  sentence.
+- **Real-time global threat intelligence.** Fetched automatically from
+  **CISA KEV** and **NVD CVE API 2.0** (both free, no key, official),
+  local cache `threat_intel.json` (max. 40 items), automatic refresh
+  every 10 minutes if the cache is older than 6 hours + a "Refresh
+  intel" button. Without internet, the old cache stays displayed and
+  the HUD clearly writes that the data may be stale. Shown as
+  **global awareness** — the plugin does NOT check whether this device
+  is affected.
+- **Explanation column in the rule catalog.** Every rule has a
+  two-level explanation: "For everyone" (plain language) and "For
+  security professionals" (patterns/triggers and their limits).
 
-### Diubah
+### Changed
 
-- **Bahasa default HUD: Inggris** (sebelumnya Indonesia).
-  Tes R1 yang mengasumsikan Indonesia kini memanggil HUD dengan
-  `lang="id"` secara eksplisit.
-- **Baseline konfigurasi kini persisten** (`cce_baseline.json`) dan
-  **dibandingkan ulang** oleh quick scan — baris MANAS-CONFIG-FIM
-  di README diperbarui (tetap bukan FIM sungguhan: tidak ada
-  pemantauan real-time).
-- **"Hapus riwayat" kini juga menghapus arsip** (live + archive +
-  feed STIX), bukan hanya file live.
-- **Unit test: 23/23 lulus** (6 V22 + 6 R1 + 11 R2 baru).
-  **E2E: 27/27 lulus** (HTTP nyata: default Inggris, `?lang=id`,
-  fallback bahasa tak dikenal, barrage → ringkasan persisten,
-  pencarian, pindai, refresh intel, hapus riwayat).
+- **HUD default language: English** (was Indonesian).
+  R1 tests that assumed Indonesian now call the HUD with `lang="id"`
+  explicitly.
+- **The config baseline is now persistent** (`cce_baseline.json`) and
+  **re-compared** by quick scan — the MANAS-CONFIG-FIM row in the
+  README updated (still not real FIM: no real-time monitoring).
+- **"Clear history" now also deletes the archive** (live + archive +
+  STIX feed), not just the live file.
+- **Unit tests: 23/23 passed** (6 V22 + 6 R1 + 11 new R2).
+  **E2E: 27/27 passed** (real HTTP: default English, `?lang=id`,
+  unknown-language fallback, barrage → persistent summary, search,
+  scans, intel refresh, clear history).
 
 ## [2.3.0-alpha] — 2026-11-09
 
-Revisi Fase R1: klaim diluruskan, label alpha, dokumentasi
-operasional, UI HUD jujur, redaksi telemetri, pemisahan event
-simulasi. **Keputusan guard (blokir/ubah) tidak berubah** —
-yang berubah adalah kejujuran label/angka dan cara data dicatat
-dan ditampilkan, bukan logika pemblokiran.
+Phase R1 revision: claims straightened out, alpha labelling,
+operational documentation, honest HUD UI, telemetry redaction,
+separation of simulation events. **Guard decisions (block/modify) did
+not change** — what changed was the honesty of labels/numbers and how
+data is recorded and displayed, not the blocking logic.
 
-### Diubah
+### Changed
 
-- **Label alpha.** Plugin kini jelas berlabel ALPHA/prototipe di
-  README.md (baris pertama), `plugin.yaml`, dan `pyproject.toml`
-  (versi 2.3.0). Peringatan opt-in + lingkungan uji non-sensitif
-  ditulis di depan.
-- **Klaim diluruskan.**
-  - Dihapus: "Absolute Defense", "Autonomous Threat-Synthesis
-    Core" sebagai klaim keamanan, "10 runtime rules" tanpa
-    pembedaan, "standards enforced" (nilai statis di kode,
-    bukan hasil pemeriksaan — README lama sendiri hanya menyebut
-    ~12 kerangka), "TAXII LIVE" (tidak ada transport TAXII —
-    hanya bundel STIX 2.1 lokal), dan "Virtual Patching Engine"
-    sebagai patch sistem (yang dilakukan hanya mengubah argumen
-    yang dikembalikan ke Hermes).
-  - Dihapus: klaim "Dual-Layout Compatibility (Hermes 0.21.x &
-    0.23.x)" dan "validate/doctor pass cleanly" — tidak ada bukti
-    integrasi di repo yang mendukungnya. Diganti dengan yang
-    benar-benar dites: Hermes 0.21.5 di PC; 0.23.x BELUM dites.
-  - Tag `stix-taxii` di `plugin.yaml` diganti `stix-local`.
-  - Deskripsi `tactical_doctrine` diperbaiki: `ssvc_enforce`
-    dan `stealth_audit` tidak punya perilaku apa pun di kode
-    (hanya nilai enum; tidak ada gate SSVC di mana pun) —
-    satu-satunya cabang doktrin adalah `counter_deceive`,
-    doktrin lain membuat CRED-HONEYPOT jatuh ke HARD_BLOCK.
-- **README ditulis ulang total** (README.md): bahasa sederhana,
-  bagian "mencegah APA / TIDAK mencegah APA", tabel 10 guard
-  (ancaman, trigger, tindakan, status, batas bypass, data yang
-  dicatat), cara install, enable/disable, konfigurasi, verifikasi
-  berhasil, troubleshooting, uninstall/rollback, data yang
-  disimpan, versi Hermes yang dites, dan glosarium istilah.
-- **Status guard dinyatakan jujur:** 0 implemented, 8
-  experimental, 2 planned (MANAS-SYMLINK-GUARD dan
-  MANAS-CALLID-RACE hanya terdefinisi di katalog, tanpa
-  enforcement).
-- **Dokumen baru:** SECURITY.md (cara melaporkan celah, tanpa
-  bounty), CHANGELOG.md (berkas ini), CONTRIBUTING.md (aturan
-  klaim + cara menjalankan tes).
+- **Alpha label.** The plugin is now clearly labelled ALPHA/prototype
+  in README.md (first line), `plugin.yaml`, and `pyproject.toml`
+  (version 2.3.0). Opt-in warning + non-sensitive test-environment
+  notice written up front.
+- **Claims straightened out.**
+  - Removed: "Absolute Defense", "Autonomous Threat-Synthesis Core"
+    as a security claim, "10 runtime rules" without distinction,
+    "standards enforced" (a static value in code, not an inspection
+    result — the old README itself only named ~12 frameworks),
+    "TAXII LIVE" (no TAXII transport — only a local STIX 2.1 bundle),
+    and "Virtual Patching Engine" as a system patch (what it does is
+    only rewrite the arguments returned to Hermes).
+  - Removed: the "Dual-Layout Compatibility (Hermes 0.21.x & 0.23.x)"
+    and "validate/doctor pass cleanly" claims — no integration evidence
+    in the repo supported them. Replaced with what was actually
+    tested: Hermes 0.21.5 on the PC; 0.23.x NOT tested.
+  - The `stix-taxii` tag in `plugin.yaml` replaced with `stix-local`.
+  - The `tactical_doctrine` description fixed: `ssvc_enforce` and
+    `stealth_audit` have no behaviour at all in code (only enum
+    values; no SSVC gate anywhere) — the only doctrine branch is
+    `counter_deceive`; other doctrines make CRED-HONEYPOT fall
+    through to HARD_BLOCK.
+- **README rewritten from scratch** (README.md): plain language,
+  "what it DOES / does NOT prevent" sections, a 10-guard table
+  (threat, trigger, action, status, bypass limits, recorded data),
+  how to install, enable/disable, configure, verify success,
+  troubleshooting, uninstall/rollback, stored data, tested Hermes
+  versions, and a glossary.
+- **Guard status stated honestly:** 0 implemented, 8 experimental,
+  2 planned (MANAS-SYMLINK-GUARD and MANAS-CALLID-RACE only defined
+  in the catalog, without enforcement).
+- **New documents:** SECURITY.md (how to report a vulnerability, no
+  bounty), CHANGELOG.md (this file), CONTRIBUTING.md (claim rules +
+  how to run tests).
 
-### Diimplementasikan di kode (bukan hanya di dokumen)
+### Implemented in code (not just in documents)
 
-- **UI HUD direvisi** (lihat
-  `Manas-Aegis-Usulan-Revisi-UI.md`): layar pertama tenang tanpa
-  alarm CVE palsu (empty state "Belum ada aktivitas yang cocok
-  dengan aturan perlindungan." + panel "Yang dipantau / Yang
-  tidak dipindai"); ID `HERMES-SEC-...` tampil sebagai ID
-  advisori internal, bukan CVE; "Virtual Patches" → "Aktivitas
-  yang diubah agar lebih aman"; "Hard Blocks" → "Aktivitas
-  diblokir oleh aturan"; "N Rules Active" → "N aturan
-  terdefinisi"; skor katalog pindah ke Detail teknis berlabel
-  "nilai referensi aturan"; status "Aktif" hanya bila hook
-  terverifikasi terdaftar, bila belum tampil "Status koneksi
-  belum dapat diverifikasi"; chime mati default (opt-in lewat
-  toggle Suara); tombol "Hapus riwayat" + endpoint
-  `/api/clear-history`.
-- **Redaksi telemetri sebelum disimpan:** `_redact_evidence`
-  (rekursif: pola secret + kredensial di URL + potong 160
-  karakter) diterapkan pada evidence sebelum event ditulis ke
-  `manas_telemetry.json` — bukan hanya pada output stream.
-- **Event simulasi dipisah dari event nyata:** `intercept_tool_call`
-  menerima `event_source="simulation"`; `execute_barrage_simulation`
-  memakai itu; counter `total_intercepted`/`hard_blocked` hanya
-  menghitung event nyata; event simulasi dihitung terpisah
-  (`simulation_events`) dan berlabel SIMULASI di HUD.
-- **Status guard di kode:** `ThreatVectorSpec.status` —
-  8 `experimental`, 2 `planned` (SYMLINK-GUARD, CALLID-RACE);
-  `get_system_posture` mengembalikan `rules_defined` (10) dan
-  `rules_enforced` (8, aturan eksperimental) + `alpha: True`,
-  menggantikan `verifiable_rules_active` dan `standards_enforced`
-  (21, nilai statis).
-- **Tes:** 12 unit test (6 lama + 6 baru R1: redaksi rekursif,
-  redaksi di telemetri tersimpan, pemisahan counter simulasi,
-  status aturan planned, empty state HUD, badge SIMULASI) —
-  **12/12 lulus** (`python3 -m unittest discover -v`,
-  diverifikasi 2026-11-09). Discovery dari root kini menemukan
-  semua tes (dulu 0 — diperbaiki dengan `tests/__init__.py`).
+- **HUD UI revised** (see `Manas-Aegis-Usulan-Revisi-UI.md`): a calm
+  first screen without fake CVE alarms (empty state "No activity
+  matching the protection rules yet." + "What is monitored / What is
+  not scanned" panel); `HERMES-SEC-...` IDs shown as internal
+  advisory IDs, not CVEs; "Virtual Patches" → "Activity made safer";
+  "Hard Blocks" → "Activity blocked by rules"; "N Rules Active" →
+  "N rules defined"; the catalog score moved to Technical details
+  labelled "rule reference value"; "Active" status only when the
+  hook is verified registered, otherwise "Connection status cannot be
+  verified yet"; chime off by default (opt-in via the Sound toggle);
+  "Clear history" button + `/api/clear-history` endpoint.
+- **Telemetry redaction before storage:** `_redact_evidence`
+  (recursive: secret patterns + credentials in URLs + 160-character
+  cut) applied to evidence before an event is written to
+  `manas_telemetry.json` — not only on the output stream.
+- **Simulation events separated from real events:** `intercept_tool_call`
+  accepts `event_source="simulation"`; `execute_barrage_simulation`
+  uses it; the `total_intercepted`/`hard_blocked` counters count only
+  real events; simulation events are counted separately
+  (`simulation_events`) and labelled SIMULATION in the HUD.
+- **Guard status in code:** `ThreatVectorSpec.status` — 8
+  `experimental`, 2 `planned` (SYMLINK-GUARD, CALLID-RACE);
+  `get_system_posture` returns `rules_defined` (10) and
+  `rules_enforced` (8, experimental rules) + `alpha: True`, replacing
+  `verifiable_rules_active` and `standards_enforced` (21, static
+  value).
+- **Tests:** 12 unit tests (6 old + 6 new R1: recursive redaction,
+  redaction in stored telemetry, simulation counter separation,
+  planned rule status, HUD empty state, SIMULATION badge) —
+  **12/12 passed** (`python3 -m unittest discover -v`, verified
+  2026-11-09). Discovery from root now finds all tests (was 0 —
+  fixed with `tests/__init__.py`).
 
-### Diketahui, masuk R2
+### Known, queued for R2
 
-- **SSRF fail-open:** DNS yang gagal saat ini dianggap SAFE
-  (core_engine.py: `except socket.gaierror: pass`). Akan dibuat
-  fail-closed; hasil cek DNS juga belum mengikat koneksi
-  berikutnya, redirect belum diperiksa.
-- **Bypass perintah git berantai (terkonfirmasi):** `git status;
-  touch /tmp/pwned` — perintah kedua tetap utuh. Rewrite hanya
-  mengganti kemunculan `git` pertama.
-- **Bypass `python -c` (terkonfirmasi):** `python -c` tanpa
-  `socket` + `subprocess` dalam string yang sama lolos dari pola
-  SHELL-RCE.
-- **Path canonicalization:** pemeriksaan path berbasis substring,
-  tanpa canonicalization dan tanpa symlink check.
-- **HUD tanpa auth/CSRF/rate limit:** endpoint HUD (termasuk
-  `/api/barrage` via POST) tidak memakai autentikasi aplikasi,
-  pemeriksaan Origin/CSRF, atau rate limit; HUD loopback saja.
-- **Tes:** 12 unit test (6 lama + 6 baru R1), cakupan tetap
-  sempit — bypass yang diketahui (git chaining, `python -c`,
-  SSRF fail-open) belum diperbaiki, itu Fase R2. Belum ada
-  contract test Hermes, CI, atau tes instalasi bersih.
-- **Packaging:** wheel Python tidak membawa `plugin.yaml` /
-  aset Desktop dan belum punya entry point plugin Hermes yang
-  dinyatakan; instalasi bersih Hermes perlu jadi release gate.
-- **Dua guard planned:** MANAS-SYMLINK-GUARD dan
-  MANAS-CALLID-RACE belum punya enforcement sama sekali.
+- **SSRF fail-open:** a failed DNS is currently treated as SAFE
+  (core_engine.py: `except socket.gaierror: pass`). Will be made
+  fail-closed; the DNS check result also does not yet bind the next
+  connection, redirect not yet checked.
+- **Confirmed git chaining bypass:** `git status; touch /tmp/pwned` —
+  the second command stays intact. The rewrite only replaces the first
+  `git` occurrence.
+- **Confirmed `python -c` bypass:** `python -c` without `socket` +
+  `subprocess` in the same string escapes the SHELL-RCE pattern.
+- **Path canonicalization:** path checks are substring-based, without
+  canonicalization and without a symlink check.
+- **HUD without auth/CSRF/rate limit:** HUD endpoints (including
+  `/api/barrage` via POST) use no application authentication,
+  Origin/CSRF check, or rate limit; HUD is loopback only.
+- **Tests:** 12 unit tests (6 old + 6 new R1), coverage still narrow —
+  the known bypasses (git chaining, `python -c`, SSRF fail-open) not
+  yet fixed, that is Phase R2. No Hermes contract test, CI, or clean
+  install test yet.
+- **Packaging:** the Python wheel does not carry `plugin.yaml` /
+  Desktop assets and has no declared Hermes plugin entry point; a
+  clean Hermes install needs to become a release gate.
+- **Two planned guards:** MANAS-SYMLINK-GUARD and MANAS-CALLID-RACE
+  have no enforcement at all.
 
 ## [2.2.0] — 2026-11-08
 
-Versi yang disubmit ke hackathon Hermes (PR katalog #151320).
-Klaim-klaim pada versi ini yang kemudian diluruskan di atas
-tercantum di `REVISI.txt` (verdict revisi).
+The version submitted to the Hermes hackathon (catalog PR #151320).
+Claims in this version that were later straightened out are listed in
+`REVISI.txt` (revision verdict).

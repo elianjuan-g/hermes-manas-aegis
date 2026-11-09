@@ -1,65 +1,62 @@
-# Berkontribusi — Manas Aegis (CONTRIBUTING.md)
+# Contributing — Manas Aegis (CONTRIBUTING.md)
 
-Terima kasih sudah mau membantu. Plugin ini masih ALPHA, jadi
-aturan di bawah ini penting agar klaim kami tetap jujur.
+Thank you for helping. This plugin is still ALPHA, so the rules below
+matter — they are what keep our claims honest.
 
-## Cara kontribusi
+## How to contribute
 
-1. Baca README.md dulu — terutama tabel guard dan bagian
-   "TIDAK mencegah APA".
-2. Buat perubahan kecil dan fokus pada satu hal.
-3. Sertakan tes bila Anda mengubah perilaku kode.
-4. Perbarui README.md / CHANGELOG.md bila perubahan Anda mengubah
-   perilaku, batas, atau klaim apa pun.
-5. Kirim perubahan sebagai pull request dengan penjelasan:
-   apa yang diubah, mengapa, dan bukti apa (tes / hasil run).
+1. Read README.md first — especially the guard table and the
+   "What it does NOT prevent" section.
+2. Make small changes, focused on one thing.
+3. Include tests when you change code behaviour.
+4. Update README.md / CHANGELOG.md when your change alters any
+   behaviour, limit, or claim.
+5. Submit your change as a pull request explaining: what changed,
+   why, and what evidence (tests / run results).
 
-## Aturan klaim (wajib)
+## Claim rules (mandatory)
 
-- **Setiap klaim harus menunjuk kode + tes.** Jangan menulis
-  klaim keamanan ("mencegah X", "memblokir Y", "N standar
-  ditegakkan") tanpa menyebutkan file + baris kode yang
-  melakukannya dan tes yang membuktikannya.
-- **Dilarang mengarang angka atau versi yang belum dites.**
-  Jangan menulis jumlah standar, jumlah aturan aktif, versi
-  Hermes yang didukung, atau hasil tes tanpa bukti run yang
-  bisa diulang.
-- **Bedakan status dengan jujur:** `implemented` (enforcement
-  nyata di jalur hook, terbukti tes), `experimental` (ada kode
-  tapi berbasis pola/parsial, ada bypass yang diketahui),
-  `planned` (hanya terdefinisi, tanpa enforcement),
-  `not supported` (tidak ada sama sekali). Jangan menaikkan
-  status tanpa bukti.
-- **Jangan memakai bahasa yang melebih-lebihkan:** hindari
-  "absolute defense", "proteksi menyeluruh", "patch sistem",
-  "feed live", atau "CVE" untuk ID internal (`HERMES-SEC-...`
-  bukan CVE publik).
+- **Every claim must point at code + a test.** Do not write a
+  security claim ("prevents X", "blocks Y", "N standards enforced")
+  without naming the file + line of code that does it and the test
+  that proves it.
+- **Do not invent numbers or untested versions.** Do not write a
+  standards count, active-rule count, supported Hermes version, or
+  test result without repeatable run evidence.
+- **State status honestly:** `implemented` (real enforcement in the
+  hook path, proven by tests), `experimental` (code exists but is
+  pattern-based/partial, with known bypasses), `planned` (only
+  defined, without enforcement), `not supported` (does not exist at
+  all). Do not raise a status without evidence.
+- **Do not use exaggerated language:** avoid "absolute defense",
+  "complete protection", "system patch", "live feed", or "CVE" for
+  internal IDs (`HERMES-SEC-...` are not public CVEs).
 
-## Cara menjalankan tes
+## How to run the tests
 
-Jalankan tes dari direktori root repo:
+Run the tests from the repo root:
 
 ```sh
 python3 -m unittest discover -v
 ```
 
-Saat ini ada **83 unit test** (61 dasar + 22 baru v2.6.2: 21 unit +
-1 kontrak) dan semuanya **lulus (83/83)**, diverifikasi 2026-11-09. Jangan menyembunyikan
-kegagalan tes: bila run Anda tidak hijau, tulis hasil sebenarnya
-di PR. Bila Anda menambah guard atau mengubah pola, tambahkan tes
-untuk: input normal, bypass/edge case, dan kondisi gagal (mis.
-DNS gagal, file state rusak).
+There are currently **83 unit tests** (61 base + 22 new in v2.6.2: 21
+unit + 1 contract) and all of them **pass (83/83)**, verified
+2026-11-09. Do not hide test failures: if your run is not green,
+write the real result in the PR. When you add a guard or change a
+pattern, add tests for: normal input, bypass/edge cases, and failure
+conditions (e.g. failed DNS, corrupt state file).
 
-## Yang tidak kami terima
+## What we do not accept
 
-- Perubahan yang memperkenalkan klaim tanpa bukti (lihat "Aturan
-  klaim" di atas).
-- Kode yang menguji celah di sistem orang lain.
-- Dependensi berbayar atau layanan yang mengharuskan akun/kunci
-  baru tanpa diskusi dulu.
-- Perubahan besar tanpa issue/PR diskusi terlebih dahulu.
+- Changes that introduce a claim without evidence (see "Claim rules"
+  above).
+- Code that probes vulnerabilities in other people's systems.
+- Paid dependencies or services that require a new account/key
+  without prior discussion.
+- Large changes without a prior issue/PR discussion.
 
-## Melaporkan celah keamanan
+## Reporting a security vulnerability
 
-Jangan lewat pull request. Lihat SECURITY.md — laporkan via
-GitHub Issues dengan label `security`.
+Not via pull request. See SECURITY.md — report via GitHub Issues
+with the `security` label.
