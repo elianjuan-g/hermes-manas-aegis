@@ -227,8 +227,14 @@ select{background:var(--btn-bg);border:1px solid var(--line);color:var(--txt);pa
 .kpi{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
 .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--acc,var(--info))}
 .kpi .n{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.posture-big{font-size:44px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
-.posture-big .grade{font-size:22px;color:var(--mut);font-weight:700}
+.posture-mini{display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:12px 16px;margin:0 0 14px}
+.posture-mini .ps-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.posture-mini .ps-score{font-size:26px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.posture-mini .ps-score .grade{font-size:14px;color:var(--mut);font-weight:700}
+.posture-mini .ps-comps{display:flex;gap:14px;flex-wrap:wrap;flex:1}
+.posture-mini .ps-comp{font-size:12px;color:var(--mut);white-space:nowrap}
+.posture-mini .ps-comp .bar{width:70px;height:6px}
+.posture-mini .ps-comp b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
 .bar{display:inline-block;width:140px;height:8px;background:var(--line-soft);border-radius:4px;vertical-align:middle;overflow:hidden}
 .bar span{display:block;height:100%;background:var(--info)}
 .pill-pass{background:rgba(0,215,150,.14);color:var(--low)}
@@ -665,26 +671,29 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
     q_esc = html.escape(query or "")
     clear_q = f"?lang={lang}" if lang != "en" else "/"
 
-    # R3: Posture Score card (big number + grade + component bars).
+    # R3: Posture Score as a compact minimalist box (score + grade on the
+    # left, five small component chips on the right). Rendered ONLY inside
+    # the Activity tab panel -- never in the shared <main> flow.
     _comp = pscore["components"]
 
-    def _pbar(label, value, maximum):
+    def _pmini(label, value, maximum):
         pct = int(round(100.0 * value / maximum)) if maximum else 0
         return (
-            f'<div class="row"><span class="k">{html.escape(label)}</span>'
-            f'<span><span class="bar"><span style="width:{pct}%"></span></span> '
-            f"{value}/{maximum}</span></div>"
+            f'<span class="ps-comp">{html.escape(label)} '
+            f'<span class="bar"><span style="width:{pct}%"></span></span> '
+            f"<b>{value}/{maximum}</b></span>"
         )
 
     posture_html = (
-        f'<div class="card"><h3>{t(lang, "posture_score")}</h3>'
-        f'<div class="posture-big">{pscore["score"]} <span class="grade">{html.escape(pscore["grade"])}</span></div>'
-        + _pbar(t(lang, "posture_rules"), _comp["rules"], 25)
-        + _pbar(t(lang, "posture_enforcement"), _comp["enforcement"], 25)
-        + _pbar(t(lang, "posture_hygiene"), _comp["hygiene"], 20)
-        + _pbar(t(lang, "posture_intel"), _comp["intel"], 15)
-        + _pbar(t(lang, "posture_activity"), _comp["activity"], 15)
-        + "</div>"
+        f'<div class="posture-mini"><div><div class="ps-title">{t(lang, "posture_score")}</div>'
+        f'<div class="ps-score">{pscore["score"]} <span class="grade">{html.escape(pscore["grade"])}</span></div></div>'
+        f'<div class="ps-comps">'
+        + _pmini(t(lang, "posture_rules"), _comp["rules"], 25)
+        + _pmini(t(lang, "posture_enforcement"), _comp["enforcement"], 25)
+        + _pmini(t(lang, "posture_hygiene"), _comp["hygiene"], 20)
+        + _pmini(t(lang, "posture_intel"), _comp["intel"], 15)
+        + _pmini(t(lang, "posture_activity"), _comp["activity"], 15)
+        + "</div></div>"
     )
 
     # R3: Arena panel rows (last persisted run, if any).
@@ -796,8 +805,8 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 </div>
 <div class="scanline">{html.escape(scan_line)}</div>
 </div>
-{posture_html}
 <div class="panel{" active" if active_tab == "act" else ""}" id="tab-act">
+{posture_html}
 <form class="search" method="get" action="">
 <input type="hidden" name="lang" value="{lang}">
 <input type="hidden" name="tab" value="act">

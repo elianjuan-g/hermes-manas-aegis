@@ -5,6 +5,28 @@ mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 secara longgar. Versi memakai `MAJOR.MINOR.PATCH` + label
 `-alpha` selama masih prototipe.
 
+## [2.6.1-alpha] — 2026-11-09
+
+Revisi kecil atas keluhan MyLord (screenshot HUD): kartu Skor Postur
+muncul di SEMUA tab dan terlalu makan ruang.
+
+### Diperbaiki
+
+- **Kartu Skor Postur kini hanya di tab Activity.** Akar masalah: kartu
+  dirender di alur `<main>` bersama sebelum panel-panel tab, jadi
+  pengalih tab (yang hanya menyembunyikan `.panel`) tidak pernah
+  menyembunyikannya. Kartu dipindah ke dalam panel `tab-act`.
+- **Kartu diubah jadi box minimalis (`.posture-mini`).** Skor 44px +
+  lima baris penuh diganti satu baris ringkas: skor 26px + grade di
+  kiri, lima komponen sebagai chip kecil (label + bar 70px + nilai)
+  di kanan. Padding 12px, tinggi total jauh lebih kecil.
+
+### Catatan
+
+- Kartu "Yang dipantau" dan "Pemindaian" tetap di alur bersama (sudah
+  begitu sejak v2.4.0, bukan bagian dari keluhan ini).
+- Tes: unit + kontrak 61/61, e2e R3 26/26, e2e posture-mini 17/17.
+
 ## [2.6.0-alpha] — 2026-11-09
 
 Revisi R3 (atas perintah MyLord: "Gimana skor nya dibuat 10 semuanya"

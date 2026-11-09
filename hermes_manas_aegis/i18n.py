@@ -1,4 +1,4 @@
-"""Manas Aegis HUD translations (v2.6.0-alpha).
+"""Manas Aegis HUD translations (v2.6.1-alpha).
 
 English is the default language. Every language must define every key
 in the English dict; t() falls back to English for any missing key, and
@@ -2830,11 +2830,11 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-SYMLINK-GUARD": {
         "en": {
             "lay": "Stops traps that use file links (symlinks) pointing at a protected file.",
-            "pro": "Enforced since v2.6.0-alpha: arguments are canonicalized (symlinks resolved); a read that resolves to a protected file is redirected to the honeypot decoy. Runtime only.",
+            "pro": "Enforced since v2.6.1-alpha: arguments are canonicalized (symlinks resolved); a read that resolves to a protected file is redirected to the honeypot decoy. Runtime only.",
         },
         "id": {
             "lay": "Menghentikan jebakan yang memakai tautan berkas (symlink) yang menunjuk ke berkas terlindungi.",
-            "pro": "Ditegakkan sejak v2.6.0-alpha: argumen dikanonikalisasi (symlink di-resolve); baca yang mengarah ke berkas terlindungi dialihkan ke decoy honeypot. Runtime saja.",
+            "pro": "Ditegakkan sejak v2.6.1-alpha: argumen dikanonikalisasi (symlink di-resolve); baca yang mengarah ke berkas terlindungi dialihkan ke decoy honeypot. Runtime saja.",
         },
     },
     "MANAS-SQLI-AST": {
@@ -2850,21 +2850,21 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     "MANAS-SHELL-RCE": {
         "en": {
             "lay": "Blocks destructive shell commands (forced delete, reverse shell, download-and-run).",
-            "pro": "Regex match for destructive shell commands, plus a real shell parser (v2.6.0-alpha) that splits chained commands on ;, &&, ||, | and blocks dangerous python -c forms per segment. Not a shell sandbox.",
+            "pro": "Regex match for destructive shell commands, plus a real shell parser (v2.6.1-alpha) that splits chained commands on ;, &&, ||, | and blocks dangerous python -c forms per segment. Not a shell sandbox.",
         },
         "id": {
             "lay": "Memblokir perintah shell yang merusak (hapus paksa, reverse shell, unduh-lalu-jalankan).",
-            "pro": "Cocok regex untuk perintah shell destruktif, plus parser shell nyata (v2.6.0-alpha) yang memecah perintah berantai pada ;, &&, ||, | dan memblokir bentuk python -c berbahaya per segmen. Bukan sandbox shell.",
+            "pro": "Cocok regex untuk perintah shell destruktif, plus parser shell nyata (v2.6.1-alpha) yang memecah perintah berantai pada ;, &&, ||, | dan memblokir bentuk python -c berbahaya per segmen. Bukan sandbox shell.",
         },
     },
     "MANAS-CALLID-RACE": {
         "en": {
             "lay": "Stops the same tool call being fired twice in the same session (duplicate/race).",
-            "pro": "Enforced since v2.6.0-alpha: identical runtime calls (same session + tool + arguments hash) within 10 s are hard-blocked. Simulation exempt.",
+            "pro": "Enforced since v2.6.1-alpha: identical runtime calls (same session + tool + arguments hash) within 10 s are hard-blocked. Simulation exempt.",
         },
         "id": {
             "lay": "Menghentikan dua sesi yang berebut call ID yang sama (duplikat/race).",
-            "pro": "Ditegakkan sejak v2.6.0-alpha: pemanggilan runtime yang identik (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block. Simulasi dikecualikan.",
+            "pro": "Ditegakkan sejak v2.6.1-alpha: pemanggilan runtime yang identik (sesi + tool + hash argumen sama) dalam 10 detik di-hard-block. Simulasi dikecualikan.",
         },
     },
 }

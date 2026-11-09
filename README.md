@@ -1,6 +1,6 @@
 # Manas Aegis — Plugin Guardrail untuk Hermes Agent
 
-> **⚠️ ALPHA / PROTOTIPE — v2.6.0-alpha**
+> **⚠️ ALPHA / PROTOTIPE — v2.6.1-alpha**
 >
 > Plugin ini masih **prototipe eksperimental**. Pasang hanya kalau Anda
 > memilih ikut mencoba (**opt-in**), dan hanya di **lingkungan uji

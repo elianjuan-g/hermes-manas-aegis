@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.6.0-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.6.1-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -108,7 +108,7 @@ class TestManasAegisR1(unittest.TestCase):
         self.assertEqual(stats["hard_blocked"], 1)
 
     def test_planned_rules_have_no_enforcement(self) -> None:
-        # R3 (v2.6.0-alpha): the two planned rules are now enforced —
+        # R3 (v2.6.1-alpha): the two planned rules are now enforced —
         # SYMLINK-GUARD via path canonicalization, CALLID-RACE via the
         # duplicate-call shield — so NO planned rules remain. The test
         # now asserts the new reality: 10/10 enforced.
@@ -810,7 +810,7 @@ class TestManasAegisR252(unittest.TestCase):
 
 
 class TestManasAegisR3(unittest.TestCase):
-    """R3 (v2.6.0-alpha): taint tracking, shell parser, SSRF fail-closed,
+    """R3 (v2.6.1-alpha): taint tracking, shell parser, SSRF fail-closed,
     symlink + call-ID guards enforced, Posture Score, Guard Arena,
     time-travel audit, HUD CSRF/rate-limit/auth, new i18n keys."""
 
