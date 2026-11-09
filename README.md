@@ -557,10 +557,10 @@ Yang perlu Anda tahu soal privasi:
 - **Hermes 0.21.5 — dites di PC.** `hermes plugins validate`
   lolos sebagian; `hermes plugins doctor` gagal pada kwarg
   `parameters` (inti hook tetap jalan). Unit + contract test di
-  salinan kerja rev1 ini: **61/61 lulus** (`python3 -m unittest
-  discover`, diverifikasi 2026-11-09) — 6 tes lama + 6 tes R1 +
-  11 tes R2 + 5 tes R2.5 + 5 tes R2.5.1 + 5 tes R2.5.2 + 16 tes
-  R3 + 7 tes kontrak. E2E HTTP nyata: **26/26 lulus**
+  salinan kerja rev1 ini: **83/83 lulus** (`python3 -m unittest
+  discover`, diverifikasi 2026-11-09) — 61 tes dari v2.6.0 (6 lama +
+  6 R1 + 11 R2 + 5 R2.5 + 5 R2.5.1 + 5 R2.5.2 + 16 R3 + 7 kontrak)
+  + 22 tes baru untuk sembilan perbaikan v2.6.2. E2E HTTP nyata: **26/26 lulus**
   (`/tmp/e2e-r3.py` — CSRF 403/200, arena 10/10, rate limit 429,
   token auth 401/302). Cakupan: **79%** (`coverage run`,
   gate CI 70%). Bypass yang diketahui di v2.5.2 (git chaining,
