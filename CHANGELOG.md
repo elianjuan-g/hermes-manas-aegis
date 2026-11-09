@@ -20,11 +20,16 @@ muncul di SEMUA tab dan terlalu makan ruang.
   lima baris penuh diganti satu baris ringkas: skor 26px + grade di
   kiri, lima komponen sebagai chip kecil (label + bar 70px + nilai)
   di kanan. Padding 12px, tinggi total jauh lebih kecil.
+- **Semua konten Activity kini di dalam tab-nya sendiri.** KPI, garis
+  history, kartu "Yang dipantau", dan kartu "Pindai" juga dipindah ke
+  dalam panel Activity (sebelumnya di alur bersama, jadi ganti tab
+  tidak mengubah apa-apa di layar). Tiap tab kini menampilkan konten
+  yang sepenuhnya berbeda.
+- **Transisi fade 180ms** saat panel aktif berganti (naik 4px + fade),
+  supaya perpindahan tab tidak terasa kaku.
 
 ### Catatan
 
-- Kartu "Yang dipantau" dan "Pemindaian" tetap di alur bersama (sudah
-  begitu sejak v2.4.0, bukan bagian dari keluhan ini).
 - Tes: unit + kontrak 61/61, e2e R3 26/26, e2e posture-mini 17/17.
 
 ## [2.6.0-alpha] — 2026-11-09

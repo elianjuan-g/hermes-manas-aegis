@@ -252,7 +252,8 @@ select{background:var(--btn-bg);border:1px solid var(--line);color:var(--txt);pa
 .search input{flex:1;background:var(--input-bg);border:1px solid var(--line);color:var(--txt);padding:9px 12px;border-radius:8px;font:inherit;font-size:13px}
 .search a{font-size:13px}
 .panel{display:none}
-.panel.active{display:block}
+.panel.active{display:block;animation:panelFade .18s ease}
+@keyframes panelFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .section-title{font-size:15px;font-weight:700;margin:20px 0 10px}
 .tablewrap{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;margin:12px 0}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -780,12 +781,14 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 </div>
 </div>
 <div class="status"><span class="dot"></span><span>{html.escape(status_line)}</span></div>
+<div class="panel{" active" if active_tab == "act" else ""}" id="tab-act">
 <div class="kpis">
 <div class="kpi" style="--acc:var(--crit)"><div class="n">{st["hard_blocked"]}</div><div class="l">{t(lang, "kpi_blocked")}</div><div class="f">{t(lang, "kpi_blocked_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_block)}</div></div>
 <div class="kpi" style="--acc:var(--high)"><div class="n">{st["virtual_patched"]}</div><div class="l">{t(lang, "kpi_modified")}</div><div class="f">{t(lang, "kpi_modified_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_modify)}</div></div>
 <div class="kpi" style="--acc:var(--med)"><div class="n">{st["honeypot_deceived"]}</div><div class="l">{t(lang, "kpi_honeypot")}</div><div class="f">{t(lang, "kpi_honeypot_foot")}</div><div class="s">{t(lang, "kpi_sim", n=sim_deceive)}</div></div>
 <div class="kpi" style="--acc:var(--info)"><div class="n">{posture["rules_defined"]}</div><div class="l">{t(lang, "kpi_rules")}</div><div class="f">{t(lang, "kpi_events", n=total)}</div><div class="s">{t(lang, "kpi_rules_sub", exp=str(len(experimental)), custom=str(len(custom)), planned=str(len(planned)))}</div></div>
 </div>
+{posture_html}
 <div class="hist">{html.escape(range_label)}</div>
 <div class="hist">{html.escape(t(lang, "history_line", real=str(hist["real"]), sim=str(hist["sim"])))}</div>
 <div class="hist">{html.escape(sim_line)}</div>
@@ -805,8 +808,6 @@ def build_analytical_hud_html(core, lang="en", query=None, active_tab="act") -> 
 </div>
 <div class="scanline">{html.escape(scan_line)}</div>
 </div>
-<div class="panel{" active" if active_tab == "act" else ""}" id="tab-act">
-{posture_html}
 <form class="search" method="get" action="">
 <input type="hidden" name="lang" value="{lang}">
 <input type="hidden" name="tab" value="act">
