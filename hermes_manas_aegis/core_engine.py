@@ -47,7 +47,7 @@ def load_vectors_fixture() -> Dict[str, Any]:
         raise RuntimeError(f"vectors fixture missing or unreadable: {fixture}") from exc
     if not isinstance(data, dict):
         raise RuntimeError(f"vectors fixture malformed (not an object): {fixture}")
-    for key in ("arena_scenarios", "py_dangerous_tokens", "test_payloads"):
+    for key in ("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors"):
         if key not in data:
             raise RuntimeError(f"vectors fixture malformed (missing {key!r}): {fixture}")
     return data

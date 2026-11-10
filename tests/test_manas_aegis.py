@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.6.4-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.6.5-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -1524,7 +1524,7 @@ class TestManasAegisR263(unittest.TestCase):
             r = conn.getresponse()
             body = r.read().decode("utf-8")
             self.assertEqual(r.status, 200)
-            self.assertIn("MANAS-AEGIS CORE v2.6.4-alpha", body)
+            self.assertIn("MANAS-AEGIS CORE v2.6.5-alpha", body)
             conn.close()
         finally:
             server.shutdown()
@@ -1567,6 +1567,72 @@ class TestManasAegisR263(unittest.TestCase):
         text = shim.read_text(encoding="utf-8")
         self.assertIn("from .hermes_manas_aegis import", text)
         self.assertNotIn("from hermes_manas_aegis import", text)
+
+
+class TestManasAegisR265Item7(unittest.TestCase):
+    """v2.6.5-alpha: finish catalog-review item 7 (teknium1).
+
+    The remaining Base64 constants (PROTECTED_FILES, SAFE_GIT_PREFIX,
+    barrage-simulation vectors) are now plain readable values; the
+    barrage vectors live in fixtures/vectors.json. These tests lock
+    that in structurally — no payload literals, no decoding here.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name) / "home"
+        (self.home / ".hermes").mkdir(parents=True)
+        self._old_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.home)
+        self.state = Path(self.tmp.name) / "state"
+        self.core = ManasAegisCore(state_dir=self.state)
+
+    def tearDown(self) -> None:
+        if self._old_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._old_home
+
+    def test_no_base64_in_core_engine(self) -> None:
+        src = (
+            Path(__file__).resolve().parent.parent
+            / "hermes_manas_aegis"
+            / "core_engine.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("import base64", src)
+        self.assertNotIn("b64decode", src)
+        self.assertNotIn("_d(", src)
+
+    def test_barrage_vectors_in_fixture(self) -> None:
+        self.assertIn("barrage_vectors", _TEST_VECTORS)
+        vectors = _TEST_VECTORS["barrage_vectors"]
+        self.assertEqual(len(vectors), 6)
+        for entry in vectors:
+            self.assertEqual(set(entry.keys()), {"tool", "args", "session"})
+        self.assertEqual(
+            [e["tool"] for e in vectors],
+            ["terminal", "read_file", "browser_snapshot", "sqlite_query", "memory_write", "terminal"],
+        )
+
+    def test_loader_requires_barrage_vectors(self) -> None:
+        src = (
+            Path(__file__).resolve().parent.parent
+            / "hermes_manas_aegis"
+            / "core_engine.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            '("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors")',
+            src,
+        )
+
+    def test_barrage_simulation_returns_six(self) -> None:
+        results = self.core.execute_barrage_simulation()
+        self.assertEqual(len(results), 6)
+        for entry in results:
+            self.assertEqual(
+                set(entry.keys()), {"tool", "session_id", "manas_verdict"}
+            )
 
 
 if __name__ == "__main__":

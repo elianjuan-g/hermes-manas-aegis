@@ -11,6 +11,8 @@ Resolve catalog review item 7 (teknium1): detection constants are now
 plain raw-string literals instead of Base64. `PROTECTED_FILES` and
 `SAFE_GIT_PREFIX` are plain values, and the barrage-simulation vectors
 moved into `fixtures/vectors.json` so reviewers and users can read them.
+A regression test locks item 7 in (no Base64 in `core_engine`, 6 fixture
+vectors, loader requires the new key).
 
 ## [2.6.4-alpha] — 2026-11-10
 
