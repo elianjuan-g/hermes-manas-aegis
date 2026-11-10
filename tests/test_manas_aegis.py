@@ -1,5 +1,5 @@
 """
-Automated Self-Test Suite for Hermes Manas-Aegis v2.6.3-alpha.
+Automated Self-Test Suite for Hermes Manas-Aegis v2.6.4-alpha.
 
 R1 additions (TestManasAegisR1): redaction before storage, simulation /
 runtime counter separation, planned-rule status, honest HUD empty state.
@@ -1300,7 +1300,7 @@ class TestManasAegisR262(unittest.TestCase):
 
 
 class TestManasAegisR263(unittest.TestCase):
-    """v2.6.3-alpha: catalog-review fixes (teknium1, CHANGES_REQUESTED).
+    """v2.6.4-alpha: catalog-review fixes (teknium1, CHANGES_REQUESTED).
 
     1. Root shim uses a relative import.
     2. RCE pattern bounded + scan capped + 40 KB timing test.
@@ -1524,7 +1524,7 @@ class TestManasAegisR263(unittest.TestCase):
             r = conn.getresponse()
             body = r.read().decode("utf-8")
             self.assertEqual(r.status, 200)
-            self.assertIn("MANAS-AEGIS CORE v2.6.3-alpha", body)
+            self.assertIn("MANAS-AEGIS CORE v2.6.4-alpha", body)
             conn.close()
         finally:
             server.shutdown()

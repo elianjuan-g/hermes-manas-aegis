@@ -1,6 +1,6 @@
 # Security — How to Report a Vulnerability (SECURITY.md)
 
-Manas Aegis is still **ALPHA / prototype** (v2.6.3-alpha). Vulnerability
+Manas Aegis is still **ALPHA / prototype** (v2.6.4-alpha). Vulnerability
 reports help a lot — but please report them safely.
 
 ## How to report

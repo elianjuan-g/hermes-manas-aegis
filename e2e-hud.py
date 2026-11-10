@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E2E HUD harness for Manas Aegis v2.6.3-alpha.
+"""E2E HUD harness for Manas Aegis v2.6.4-alpha.
 
 Real HTTP against a test HUD server (ephemeral port on 127.0.0.1):
 Host allow/deny, login flow, CSRF enforcement, rate limit,
@@ -98,7 +98,7 @@ def main() -> int:
         st, _, body = req("GET", "/", auth)
         text = body.decode("utf-8", "replace")
         check("authed GET (200)", st == 200, f"status={st}")
-        check("version string 2.6.3-alpha", "MANAS-AEGIS CORE v2.6.3-alpha" in text)
+        check("version string 2.6.4-alpha", "MANAS-AEGIS CORE v2.6.4-alpha" in text)
         check("Posture shown", "Posture" in text)
         pscore = core.compute_posture_score()
         exact = f">{pscore['score']} <span class=\"grade\">{pscore['grade']}</span>"

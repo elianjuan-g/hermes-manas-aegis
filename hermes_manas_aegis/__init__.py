@@ -1351,6 +1351,40 @@ def tool_manas_stix_intelligence(view: str = "stix_feed") -> str:
     )
 
 
+def tool_manas_tactical_core_handler(args: Any = None, **kwargs: Any) -> str:
+    """Model-tool entry point for `manas_tactical_core`.
+
+    Hermes calls tool handlers as ``handler(args_dict, **kwargs)``, so the
+    first positional argument is the tool-call arguments object — NOT the
+    ``action`` string. Calling the bare ``tool_manas_tactical_core``
+    directly as the handler would bind the dict to ``action``, so
+    ``action == "barrage"`` could never be true and every model call
+    would silently return the default (status) branch. This wrapper
+    unwraps the dict and forwards the real value. Slash commands keep
+    calling the bare function directly with kwargs.
+    """
+    if not isinstance(args, dict):
+        return json.dumps(
+            {"error": "manas_tactical_core expects an arguments object"}
+        )
+    return tool_manas_tactical_core(action=args.get("action", "status"))
+
+
+def tool_manas_stix_intelligence_handler(args: Any = None, **kwargs: Any) -> str:
+    """Model-tool entry point for `manas_stix_intelligence`.
+
+    Same unwrapping as `tool_manas_tactical_core_handler`: core passes the
+    arguments dict positionally, so ``view`` must be read out of it —
+    otherwise every model call would silently return the default
+    (stix_feed) branch.
+    """
+    if not isinstance(args, dict):
+        return json.dumps(
+            {"error": "manas_stix_intelligence expects an arguments object"}
+        )
+    return tool_manas_stix_intelligence(view=args.get("view", "stix_feed"))
+
+
 def register(ctx: Any) -> None:
     """Official Hermes Plugin Entrypoint (`hermes_manas_aegis:register`)."""
     cfg = getattr(ctx, "config", {}) if hasattr(ctx, "config") else {}
@@ -1368,36 +1402,52 @@ def register(ctx: Any) -> None:
         core.hooks_verified = True
 
     if hasattr(ctx, "register_tool"):
+        # One registration per tool, in the single form matching the
+        # 0.21.5 signature (name, toolset, schema, handler) and current
+        # Hermes alike. The old `parameters=` keyword call matched NO
+        # register_tool signature: on real 0.21.5 discovery it raised
+        # TypeError and the loader discarded ALL of this plugin's
+        # registrations (hooks included) — the plugin failed to load
+        # while the HUD still served, because the HUD server starts
+        # before register_tool is reached. (v2.6.4.)
         ctx.register_tool(
             name="manas_tactical_core",
-            description="Control the Manas-Aegis guardrail (alpha): `status` shows local posture, `barrage` runs 6 local simulation examples against the rules.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["status", "barrage"],
-                        "description": "Use 'barrage' to run 6 local simulation examples against the rules.",
-                    }
+            toolset="hermes_manas_aegis",
+            schema={
+                "name": "manas_tactical_core",
+                "description": "Control the Manas-Aegis guardrail (alpha): `status` shows local posture, `barrage` runs 6 local simulation examples against the rules.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["status", "barrage"],
+                            "description": "Use 'barrage' to run 6 local simulation examples against the rules.",
+                        }
+                    },
+                    "required": ["action"],
                 },
-                "required": ["action"],
             },
-            handler=tool_manas_tactical_core,
+            handler=tool_manas_tactical_core_handler,
         )
         ctx.register_tool(
             name="manas_stix_intelligence",
-            description="Export local STIX 2.1 bundles from stored events, or inspect the rule catalogue (internal advisory IDs, reference scores).",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "view": {
-                        "type": "string",
-                        "enum": ["stix_feed", "matrix"],
-                    }
+            toolset="hermes_manas_aegis",
+            schema={
+                "name": "manas_stix_intelligence",
+                "description": "Export local STIX 2.1 bundles from stored events, or inspect the rule catalogue (internal advisory IDs, reference scores).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "view": {
+                            "type": "string",
+                            "enum": ["stix_feed", "matrix"],
+                        }
+                    },
+                    "required": ["view"],
                 },
-                "required": ["view"],
             },
-            handler=tool_manas_stix_intelligence,
+            handler=tool_manas_stix_intelligence_handler,
         )
 
     if hasattr(ctx, "register_command"):

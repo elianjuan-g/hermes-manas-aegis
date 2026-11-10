@@ -8,14 +8,14 @@
 
 [![Docs](https://img.shields.io/badge/docs-README-blue?style=flat)](https://github.com/elianjuan-g/hermes-manas-aegis#readme)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-![Version](https://img.shields.io/badge/version-v2.6.3--alpha-e8b64c?style=flat)
+![Version](https://img.shields.io/badge/version-v2.6.4--alpha-e8b64c?style=flat)
 ![Tests](https://img.shields.io/badge/tests-83%2F83-brightgreen?style=flat)
 ![Hermes](https://img.shields.io/badge/Hermes-%3E%3D0.21.0-orange?style=flat)
 ![Languages](https://img.shields.io/badge/languages-15-blue?style=flat)
 
 </div>
 
-**Manas Aegis is a fail-closed guardrail plugin for Hermes Agent: before Hermes runs a tool, it checks the tool's arguments against 10 enforced rules and blocks, rewrites, or redirects what matches — with a local dashboard (HUD) that shows every decision, a Posture Score, a Guard Arena, and live global threat intelligence. It is an ALPHA prototype (v2.6.3-alpha), opt-in, for non-sensitive test environments only — not standalone security, not a device scanner, and not a guarantee that no attack gets through.**
+**Manas Aegis is a fail-closed guardrail plugin for Hermes Agent: before Hermes runs a tool, it checks the tool's arguments against 10 enforced rules and blocks, rewrites, or redirects what matches — with a local dashboard (HUD) that shows every decision, a Posture Score, a Guard Arena, and live global threat intelligence. It is an ALPHA prototype (v2.6.4-alpha), opt-in, for non-sensitive test environments only — not standalone security, not a device scanner, and not a guarantee that no attack gets through.**
 
 > **ALPHA / PROTOTYPE — v2.6.3-alpha**
 >
@@ -594,9 +594,10 @@ Run the tests from the repo root:
 python3 -m unittest discover -v
 ```
 
-- **Unit + contract tests: 94/94 pass** — 83 from v2.6.2 (61 from
+- **Unit + contract tests: 99/99 pass** — 83 from v2.6.2 (61 from
   v2.6.0 + 22 new for the nine v2.6.2 fixes, verified 2026-11-09)
-  + 11 new for the seven v2.6.3 fixes (verified 2026-11-10).
+  + 11 new for the seven v2.6.3 fixes (verified 2026-11-10)
+  + 5 new for the two v2.6.4 load fixes (verified 2026-11-10).
 - **Real-HTTP e2e: 17/17 pass** (`e2e-hud.py` — Host 403, login
   401/302, CSRF 403/200, `/api/search`, `/api/stix`, Posture score,
   rate limit 429). The old harness `/tmp/e2e-r3.py` covered 26/26
@@ -689,9 +690,10 @@ installed.
 - **Hermes 0.21.5 — tested on PC.** `hermes plugins validate` passes
   partially; `hermes plugins doctor` fails on the `parameters` kwarg
   (core hooks still run). Unit + contract tests in this rev1 working
-  copy: **94/94 pass** (`python3 -m unittest discover`, verified
+  copy: **99/99 pass** (`python3 -m unittest discover`, verified
   2026-11-10) — 83 tests from v2.6.2 (61 from v2.6.0 + 22 new for the
-  nine v2.6.2 fixes) + 11 new tests for the seven v2.6.3 fixes.
+  nine v2.6.2 fixes) + 11 new tests for the seven v2.6.3 fixes + 5 new
+  tests for the two v2.6.4 load fixes.
   Real-HTTP e2e: **17/17 pass** (`e2e-hud.py` — Host 403, login
   401/302, CSRF 403/200, `/api/search`, `/api/stix`, Posture score,
   rate limit 429). Coverage:

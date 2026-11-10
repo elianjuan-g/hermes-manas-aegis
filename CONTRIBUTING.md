@@ -40,8 +40,8 @@ Run the tests from the repo root:
 python3 -m unittest discover -v
 ```
 
-There are currently **94 unit tests** (83 from v2.6.2: 61 base + 22
-new in v2.6.2 + 11 new in v2.6.3) and all of them **pass (94/94)**,
+There are currently **99 unit tests** (83 from v2.6.2: 61 base + 22
+new in v2.6.2 + 11 new in v2.6.3 + 5 new in v2.6.4) and all of them **pass (99/99)**,
 verified 2026-11-10. Do not hide test failures: if your run is not
 green, write the real result in the PR. When you add a guard or change
 a pattern, add tests for: normal input, bypass/edge cases, and failure

@@ -1,4 +1,4 @@
-"""Manas Aegis HUD translations (v2.6.3-alpha).
+"""Manas Aegis HUD translations (v2.6.4-alpha).
 
 English is the default language. Every language must define every key
 in the English dict; t() falls back to English for any missing key, and

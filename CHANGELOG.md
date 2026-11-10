@@ -5,6 +5,42 @@ loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use `MAJOR.MINOR.PATCH` + the `-alpha` label while the
 plugin is still a prototype.
 
+## [2.6.4-alpha] — 2026-11-10
+
+Load failure on real Hermes 0.21.5, found by a live-discovery test (the
+v2.6.3 self-verdict missed it: `hermes plugins validate` probes
+`register()` with a permissive mock context, and the HUD still served
+because its server starts before the failing call). Two fixes, both
+verified by new contract tests and a live-discovery test on real
+Hermes 0.21.5.
+
+### Fixed
+
+- **`register_tool` now uses the real signature.** Both tool
+  registrations called `ctx.register_tool(name=..., description=...,
+  parameters={...}, handler=...)` — no `toolset`, no `schema`, and
+  `parameters=` is not a keyword the real `register_tool(name,
+  toolset, schema, handler, ...)` accepts. On real 0.21.5 discovery
+  that raised `TypeError` and the loader discarded ALL of the
+  plugin's registrations (hooks included), so the plugin failed to
+  load while looking alive. Both calls are now the single form
+  `register_tool(name, toolset="hermes_manas_aegis",
+  schema={"name": ..., "description": ..., "parameters": {...}},
+  handler=...)`, with the JSON Schemas byte-identical to before.
+- **Tool handlers now unwrap the arguments dict.** Core calls
+  handlers as `handler(args_dict, **kwargs)`, but
+  `tool_manas_tactical_core(action="status")` and
+  `tool_manas_stix_intelligence(view="stix_feed")` took the value as
+  a plain string parameter — so a model call bound the whole dict to
+  `action`/`view` and the tool silently returned the default branch
+  for every call (`barrage` and `matrix` could never run). Two thin
+  wrappers (`tool_manas_tactical_core_handler`,
+  `tool_manas_stix_intelligence_handler`) read the value out of the
+  dict and forward it; they are the registered handlers now. The
+  bare functions are unchanged — the `/manas-hud`, `/manas-barrage`,
+  and `/manas-stix` slash commands still call them directly with
+  kwargs.
+
 ## [2.6.3-alpha] — 2026-11-10
 
 Revision on the catalog maintainer's review of PR #151504 at commit
