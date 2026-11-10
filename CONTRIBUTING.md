@@ -40,11 +40,11 @@ Run the tests from the repo root:
 python3 -m unittest discover -v
 ```
 
-There are currently **83 unit tests** (61 base + 22 new in v2.6.2: 21
-unit + 1 contract) and all of them **pass (83/83)**, verified
-2026-11-09. Do not hide test failures: if your run is not green,
-write the real result in the PR. When you add a guard or change a
-pattern, add tests for: normal input, bypass/edge cases, and failure
+There are currently **94 unit tests** (83 from v2.6.2: 61 base + 22
+new in v2.6.2 + 11 new in v2.6.3) and all of them **pass (94/94)**,
+verified 2026-11-10. Do not hide test failures: if your run is not
+green, write the real result in the PR. When you add a guard or change
+a pattern, add tests for: normal input, bypass/edge cases, and failure
 conditions (e.g. failed DNS, corrupt state file).
 
 ## What we do not accept

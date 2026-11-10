@@ -1,5 +1,5 @@
 """
-Contract tests for Hermes Manas-Aegis (R3, v2.6.2-alpha).
+Contract tests for Hermes Manas-Aegis (R3, v2.6.3-alpha).
 
 These verify the plugin's PUBLIC interface — what Hermes, the catalog
 validator, and the Desktop actually consume — not internals:

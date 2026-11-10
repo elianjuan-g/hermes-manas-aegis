@@ -6,6 +6,7 @@ include CONTRIBUTING.md
 include LICENSE
 include pyproject.toml
 recursive-include desktop *
+recursive-include fixtures *
 recursive-include honeypot_sandbox *
 recursive-include .github *
 global-exclude *.pyc

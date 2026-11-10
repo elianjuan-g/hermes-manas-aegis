@@ -5,6 +5,81 @@ loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use `MAJOR.MINOR.PATCH` + the `-alpha` label while the
 plugin is still a prototype.
 
+## [2.6.3-alpha] — 2026-11-10
+
+Revision on the catalog maintainer's review of PR #151504 at commit
+`cc182958` (teknium1, CHANGES_REQUESTED). Seven fixes, all verified
+by tests (94/94) and a real-HTTP HUD harness (17/17, `e2e-hud.py`).
+
+### Security — fixed
+
+- **Plugin root shim uses a relative import.** `__init__.py` now does
+  `from .hermes_manas_aegis import ...` instead of the absolute
+  import, so the plugin loads when Hermes mounts the plugin directory
+  as a package without putting it on `sys.path`.
+- **RCE pattern no longer has unbounded lazy segments.** The two
+  `.*?` gaps in the `python3 -c` branch are now `[^\n]{0,256}?`, the
+  pattern searches are capped at the first 8 KB of serialized
+  arguments, and a 40 KB near-miss input is now checked in ~0.1 s
+  (the reviewer measured 2.2 s on a ~9 KB input). A payload hidden
+  past 8 KB is not scanned by these patterns — a documented trade-off.
+- **Credential-file contents are never read.** Config integrity now
+  uses `os.stat` fingerprints (size + mtime_ns + inode) instead of
+  SHA-256 of the file contents, and the filesystem scan skips
+  `.env`, `auth.json`, and `config.yaml` entirely. Same-size content
+  changes are invisible to the fingerprint by design (a same-size,
+  same-mtime rewrite is indistinguishable from no change) — a changed
+  size or mtime is still detected.
+- **HUD: Host check + login always on.** Requests whose `Host` header
+  is not `127.0.0.1:<port>` or `localhost:<port>` are rejected (403).
+  The CSRF token is no longer embedded in an unauthenticated GET —
+  the dashboard is only served after login. When no `hud_auth_token`
+  is configured, one is generated once on first run and stored in the
+  state directory (`hud_auth_token.txt`, mode 0600).
+
+### Changed
+
+- **Manifest declares top-level `provides_tools` / `provides_hooks`.**
+  `hermes plugins validate` (and the loader) read only those
+  top-level lists — the nested `provides:` block was invisible to
+  the validator, so the registered tools and hooks were reported as
+  "undeclared" and validation failed on v2.6.2 and v2.6.3 alike.
+  Both lists now exist (kept in sync with the nested block).
+- **Detection patterns are plain readable raw strings.** The five
+  detection patterns (SQLI, RCE, CONFIG_HOOK_POISON,
+  MEMORY_DIRECTIVE_POISON, XSS) are now `re.compile(r"...")`
+  literals instead of base64 blobs — same matches (verified by
+  sample-equivalence tests), except the RCE bound segments above.
+  `PROTECTED_FILES` and `SAFE_GIT_PREFIX` remain base64-encoded
+  path/command literals, not detection patterns.
+- **Detection/test vectors live in a JSON fixture.** The arena
+  scenarios, the `python -c` dangerous-token list, and the two
+  scanner-flagged test payloads moved from code literals to
+  `fixtures/vectors.json` (loaded by `load_vectors_fixture()` at
+  import; a missing or malformed fixture raises instead of running
+  with an empty corpus). Payloads are byte-identical to the
+  literals they replace — verified by round-trip plus the
+  unchanged 94-test suite and a 10/10 arena. The install-time
+  scanner treats a `fixtures/` tree as inert test data, so
+  `hermes plugins validate` no longer flags the plugin's own
+  corpus. Historical payload examples in
+  `docs/history/phase0-verification.md` now reference the fixture
+  instead of quoting them.
+- **Desktop HUD uses `SandboxedFrame` + port from config.**
+  `desktop/plugin.js` renders the HUD with the SDK `SandboxedFrame`
+  (opaque origin, `allow-scripts`) instead of a raw iframe, and reads
+  the port from the plugin's `hud_port` config via the
+  `plugins.manage` list RPC instead of hardcoding 18777. Because the
+  frame's opaque origin has no cookies/storage, login stays token-in-
+  page (after login) rather than a cookie-based CSRF double-submit.
+- **State lives under `plugin-data/`.** All state (telemetry,
+  archive, scan state, baseline, intel cache, custom rules, HUD
+  token) now lives in
+  `<hermes home>/plugin-data/hermes-manas-aegis/`, resolved via
+  `plugin_data_dir()` when available and `get_hermes_home()` as
+  fallback. State from the old locations is copied over on first run
+  and never deleted.
+
 ## [2.6.2-alpha] — 2026-11-09
 
 Revision on Argon's audit of v2.6.1 (researched and corrected by Ciel;

@@ -1,4 +1,4 @@
-"""Threat-intel fetcher for Manas Aegis (v2.6.2-alpha).
+"""Threat-intel fetcher for Manas Aegis (v2.6.3-alpha).
 
 Fetches GLOBAL threat intelligence from free, public, no-key sources:
 - CISA KEV (Known Exploited Vulnerabilities): the authoritative list of
@@ -41,7 +41,7 @@ def fetch_json(
     if opener is not None:
         raw = opener(url, timeout)
     else:
-        req = urllib.request.Request(url, headers={"User-Agent": "Manas-Aegis/2.6.2-alpha"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Manas-Aegis/2.6.3-alpha"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(CACHE_MAX_BYTES + 1)
     if isinstance(raw, (bytes, bytearray)) and len(raw) > CACHE_MAX_BYTES:

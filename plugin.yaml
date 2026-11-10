@@ -1,5 +1,5 @@
 name: hermes-manas-aegis
-version: 2.6.2
+version: 2.6.3
 description: "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks that can block or rewrite some risky tool arguments, with local telemetry and a loopback HUD. Opt-in, test environments only — see README.md for limits."
 author: "Alianza Meridian Corp"
 license: "MIT"
@@ -34,6 +34,20 @@ provides:
     - /manas-hud
     - /manas-barrage
     - /manas-stix
+
+# Top-level provides_* lists (v2.6.3): `hermes plugins validate` and the
+# loader read ONLY these keys — the nested `provides:` block above is
+# not seen by the validator, so the registered tools/hooks were
+# reported as "undeclared". Keep both in sync.
+provides_tools:
+  - manas_tactical_core
+  - manas_stix_intelligence
+provides_hooks:
+  - on_session_start
+  - pre_llm_call
+  - pre_tool_call
+  - transform_tool_result
+  - transform_llm_output
 
 config_schema:
   tactical_doctrine:
@@ -76,4 +90,4 @@ config_schema:
   hud_auth_token:
     type: string
     default: ""
-    description: "Optional shared secret for the loopback HUD login: when set, the HUD login page requires this token (submitted once, then a 24h HttpOnly session cookie). Empty means no login (loopback + CSRF + rate limit only)."
+    description: "Shared secret for the loopback HUD login: when set, the HUD login page requires this token (submitted once, then a 24h HttpOnly session cookie). Empty means a token is generated automatically on first start and stored in the plugin-data dir (hud_auth_token.txt, mode 0600); the login page shows the file location. The HUD always requires login."

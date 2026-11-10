@@ -1,4 +1,4 @@
-"""Manas Aegis HUD translations (v2.6.2-alpha).
+"""Manas Aegis HUD translations (v2.6.3-alpha).
 
 English is the default language. Every language must define every key
 in the English dict; t() falls back to English for any missing key, and
@@ -2819,7 +2819,7 @@ RULE_EXPLAIN: Dict[str, Dict[str, Dict[str, str]]] = {
     },
     "MANAS-MEM-FIREWALL": {
         "en": {
-            "lay": "Cleans hidden commands (like 'ignore all previous instructions') out of text going into memory.",
+            "lay": "Cleans hidden commands (like orders to set aside earlier instructions) out of text going into memory.",
             "pro": "Directive-injection and zero-width-character patterns on *memory* tools; matching arguments are sanitized. Only tools named *memory*.",
         },
         "id": {

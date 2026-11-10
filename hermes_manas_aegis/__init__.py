@@ -8,8 +8,10 @@ import hashlib
 import hmac
 import html
 import json
+import os
 import re
 import secrets
+import shutil
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,10 +31,14 @@ _SERVER_OK: Optional[bool] = None  # None = belum dicoba, True = bind berhasil, 
 # but a malicious page in the user's browser could still POST to it
 # (CSRF), and a runaway loop could hammer the endpoints. So every
 # POST needs the per-process CSRF token (embedded in the page, sent
-# as X-CSRF-Token) and is rate-limited per client IP. Token auth is
-# opt-in: set config "hud_auth_token" and every request needs a
-# session cookie obtained from /api/login; by default (no token
-# configured) the HUD is open on loopback, as before.
+# as X-CSRF-Token) and is rate-limited per client IP.
+# v2.6.3 (catalog review): two more layers. (1) Host check: any
+# request whose Host is not 127.0.0.1:<port> or localhost:<port> is
+# rejected, so a DNS-rebinding page cannot read the HUD at all. (2)
+# Login is mandatory: set config "hud_auth_token" or a token is
+# generated once and persisted in the plugin-data dir; the CSRF
+# token is only embedded in the page served after login. There is
+# no longer an open-by-default mode.
 _CSRF_TOKEN = secrets.token_hex(16)
 _RATE_LIMIT: Dict[str, list] = {}
 _RATE_MAX = 20  # POSTs per window per IP
@@ -42,6 +48,58 @@ _SESSIONS: Dict[str, float] = {}  # session value -> expiry epoch
 
 def _session_for(token: str) -> str:
     return hashlib.sha256(f"manas-aegis:{token}".encode("utf-8")).hexdigest()
+
+
+# v2.6.3 (catalog review): the HUD requires login by default. If the
+# operator did not set hud_auth_token, a token is generated once and
+# persisted in the plugin-data dir (mode 0600); the login page shows
+# the file location. A configured token always wins.
+_HUD_TOKEN_FILE = "hud_auth_token.txt"
+
+
+def _effective_hud_token(core) -> str:
+    configured = str(core.config.get("hud_auth_token") or "").strip()
+    if configured:
+        return configured
+    cached = getattr(core, "_hud_token_cache", "")
+    if cached:
+        return cached
+    token_file = core.state_dir / _HUD_TOKEN_FILE
+    try:
+        if token_file.is_file():
+            token = token_file.read_text(encoding="utf-8").strip()
+            if token:
+                core._hud_token_cache = token
+                return token
+    except Exception:
+        pass
+    token = secrets.token_urlsafe(32)
+    try:
+        token_file.write_text(token + "\n", encoding="utf-8")
+        try:
+            os.chmod(token_file, 0o600)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    core._hud_token_cache = token
+    return token
+
+
+def _host_ok(handler) -> bool:
+    """True when the request targets this loopback server directly.
+
+    v2.6.3 (catalog review): a DNS-rebinding page makes the browser
+    send Host: <attacker-domain>:<port>; only the loopback names the
+    server itself listens on are accepted. A missing Host header, or
+    any other name, is rejected.
+    """
+    host = (handler.headers.get("Host") or "").strip().lower()
+    try:
+        port = handler.server.server_address[1]
+    except Exception:
+        return False
+    return host in (f"127.0.0.1:{port}", f"localhost:{port}")
 
 
 def _rate_limited(ip: str) -> bool:
@@ -60,9 +118,10 @@ def _csrf_ok(handler) -> bool:
 
 
 def _authed(handler, core) -> bool:
-    token = core.config.get("hud_auth_token")
-    if not token:
-        return True
+    # v2.6.3: login is mandatory — the effective token is either the
+    # configured hud_auth_token or the auto-generated one persisted in
+    # the plugin-data dir. There is no longer an open-by-default mode.
+    token = _effective_hud_token(core)
     cookie = handler.headers.get("Cookie") or ""
     for part in cookie.split(";"):
         part = part.strip()
@@ -74,10 +133,91 @@ def _authed(handler, core) -> bool:
     return False
 
 
+# v2.6.3 (catalog review): plugin state lives under
+# get_hermes_home()/plugin-data/hermes-manas-aegis/ — never in the
+# install dir and never under a hardcoded ~/.hermes (that breaks
+# profiles). Resolution order: the canonical
+# plugins.plugin_storage.plugin_data_dir() helper, then
+# hermes_constants.get_hermes_home(), then Path.home()/".hermes"
+# as a last resort. Resolved fresh on every call so a profile
+# switch is followed; nothing is cached across calls.
+_PLUGIN_DATA_NAME = "hermes-manas-aegis"
+_LEGACY_STATE_DIRNAME = "hermes-manas-aegis"
+_LEGACY_CUSTOM_RULES = "manas-aegis-custom-rules.json"
+_MIGRATED_STATE_FILES = (
+    "manas_telemetry.json",
+    "manas_telemetry_archive.jsonl",
+    "scan_state.json",
+    "cce_baseline.json",
+    "threat_intel.json",
+)
+
+
+def _resolve_plugin_data_dir() -> Path:
+    try:
+        from plugins.plugin_storage import plugin_data_dir
+
+        return plugin_data_dir(_PLUGIN_DATA_NAME)
+    except Exception:
+        pass
+    try:
+        from hermes_constants import get_hermes_home
+
+        root = get_hermes_home() / "plugin-data" / _PLUGIN_DATA_NAME
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+    except Exception:
+        pass
+    root = Path.home() / ".hermes" / "plugin-data" / _PLUGIN_DATA_NAME
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _migrate_legacy_state(new_dir: Path) -> None:
+    """Copy pre-v2.6.3 state into the plugin-data dir, once.
+
+    The old home was Path.home()/".hermes"/plugins/hermes-manas-aegis/
+    (telemetry, scan state, CCE baseline, threat-intel cache, honeypot
+    decoys) plus ~/.hermes/manas-aegis-custom-rules.json. Files are
+    COPIED, never moved or deleted: the old directory stays as a
+    backup. Only files missing in the new dir are copied.
+    """
+    legacy_dir = Path.home() / ".hermes" / "plugins" / _LEGACY_STATE_DIRNAME
+    if legacy_dir.is_dir():
+        for name in _MIGRATED_STATE_FILES:
+            src = legacy_dir / name
+            dst = new_dir / name
+            if src.is_file() and not dst.exists():
+                try:
+                    shutil.copyfile(src, dst)
+                except Exception:
+                    pass
+        src_decoys = legacy_dir / "honeypot_sandbox"
+        dst_decoys = new_dir / "honeypot_sandbox"
+        if src_decoys.is_dir():
+            dst_decoys.mkdir(parents=True, exist_ok=True)
+            for decoy in ("decoy_auth.json", "decoy.env"):
+                src = src_decoys / decoy
+                dst = dst_decoys / decoy
+                if src.is_file() and not dst.exists():
+                    try:
+                        shutil.copyfile(src, dst)
+                    except Exception:
+                        pass
+    legacy_rules = Path.home() / ".hermes" / _LEGACY_CUSTOM_RULES
+    dst_rules = new_dir / _LEGACY_CUSTOM_RULES
+    if legacy_rules.is_file() and not dst_rules.exists():
+        try:
+            shutil.copyfile(legacy_rules, dst_rules)
+        except Exception:
+            pass
+
+
 def get_core(config: Optional[Dict[str, Any]] = None) -> ManasAegisCore:
     global _CORE
     if _CORE is None:
-        state_dir = Path.home() / ".hermes" / "plugins" / "hermes-manas-aegis"
+        state_dir = _resolve_plugin_data_dir()
+        _migrate_legacy_state(state_dir)
         _CORE = ManasAegisCore(state_dir=state_dir, config=config or {})
     return _CORE
 
@@ -878,13 +1018,27 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self) -> None:
+        if not _host_ok(self):
+            payload = json.dumps({"status": "error", "error": "bad_host"}).encode("utf-8")
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         core = get_core()
         if not _authed(self, core):
+            token_hint = ""
+            if not str(core.config.get("hud_auth_token") or "").strip():
+                token_hint = (
+                    "<p>Your HUD token was generated automatically and is stored in "
+                    f"<code>{html.escape(str(core.state_dir / _HUD_TOKEN_FILE))}</code>.</p>"
+                )
             login_html = (
                 "<!doctype html><html><head><meta charset='utf-8'>"
                 "<title>Manas Aegis — Login</title></head><body>"
                 "<h1>Manas Aegis</h1>"
                 "<p>This HUD is protected. Enter the HUD token to continue.</p>"
+                + token_hint +
                 "<form method='POST' action='/api/login'>"
                 "<input type='password' name='token' autocomplete='off' />"
                 "<button type='submit'>Login</button></form></body></html>"
@@ -944,6 +1098,13 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
         self.wfile.write(html_bytes)
 
     def do_POST(self) -> None:
+        if not _host_ok(self):
+            payload = json.dumps({"status": "error", "error": "bad_host"}).encode("utf-8")
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         core = get_core()
         ip = self.client_address[0] if self.client_address else "unknown"
         if self.path != "/api/login" and _rate_limited(ip):
@@ -959,7 +1120,7 @@ class _ManasHUDHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(length).decode("utf-8") if length else ""
             qs = parse_qs(body)
             submitted = (qs.get("token", [""])[0] or "").strip()
-            want = str(core.config.get("hud_auth_token") or "")
+            want = _effective_hud_token(core)
             if want and hmac.compare_digest(submitted, want):
                 sess = _session_for(want)
                 _SESSIONS[sess] = time.time() + 24 * 3600

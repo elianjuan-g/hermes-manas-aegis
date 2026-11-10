@@ -6,7 +6,7 @@ while also supporting `hermes_manas_aegis:register` package entrypoint.
 
 from __future__ import annotations
 
-from hermes_manas_aegis import (
+from .hermes_manas_aegis import (
     build_analytical_hud_html,
     ensure_hud_server_running,
     get_core,

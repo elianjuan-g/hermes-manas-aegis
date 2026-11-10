@@ -1,6 +1,6 @@
 # Security — How to Report a Vulnerability (SECURITY.md)
 
-Manas Aegis is still **ALPHA / prototype** (v2.6.2-alpha). Vulnerability
+Manas Aegis is still **ALPHA / prototype** (v2.6.3-alpha). Vulnerability
 reports help a lot — but please report them safely.
 
 ## How to report
@@ -45,7 +45,8 @@ commands are handled by a real shell parser (since v2.6.0); dangerous
 `python -c` is detected through absolute paths and combined flags
 (since v2.6.0, hardened in v2.6.2); paths are canonicalized and
 symlinks are checked (since v2.6.0); and the HUD has CSRF protection,
-rate limiting, and opt-in token authentication (since v2.6.0).
+rate limiting, and token authentication (since v2.6.0, always on
+since v2.6.3 — a token is auto-generated when none is configured).
 
 What remains true: the guard is pattern-based, so new bypass variants
 may exist; telemetry stores redacted evidence fragments; and the HUD

@@ -8,16 +8,16 @@
 
 [![Docs](https://img.shields.io/badge/docs-README-blue?style=flat)](https://github.com/elianjuan-g/hermes-manas-aegis#readme)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-![Version](https://img.shields.io/badge/version-v2.6.2--alpha-e8b64c?style=flat)
+![Version](https://img.shields.io/badge/version-v2.6.3--alpha-e8b64c?style=flat)
 ![Tests](https://img.shields.io/badge/tests-83%2F83-brightgreen?style=flat)
 ![Hermes](https://img.shields.io/badge/Hermes-%3E%3D0.21.0-orange?style=flat)
 ![Languages](https://img.shields.io/badge/languages-15-blue?style=flat)
 
 </div>
 
-**Manas Aegis is a fail-closed guardrail plugin for Hermes Agent: before Hermes runs a tool, it checks the tool's arguments against 10 enforced rules and blocks, rewrites, or redirects what matches — with a local dashboard (HUD) that shows every decision, a Posture Score, a Guard Arena, and live global threat intelligence. It is an ALPHA prototype (v2.6.2-alpha), opt-in, for non-sensitive test environments only — not standalone security, not a device scanner, and not a guarantee that no attack gets through.**
+**Manas Aegis is a fail-closed guardrail plugin for Hermes Agent: before Hermes runs a tool, it checks the tool's arguments against 10 enforced rules and blocks, rewrites, or redirects what matches — with a local dashboard (HUD) that shows every decision, a Posture Score, a Guard Arena, and live global threat intelligence. It is an ALPHA prototype (v2.6.3-alpha), opt-in, for non-sensitive test environments only — not standalone security, not a device scanner, and not a guarantee that no attack gets through.**
 
-> **ALPHA / PROTOTYPE — v2.6.2-alpha**
+> **ALPHA / PROTOTYPE — v2.6.3-alpha**
 >
 > Install only if you choose to try it (**opt-in**), and only in a
 > **non-sensitive test environment** — not on a production machine,
@@ -37,7 +37,7 @@
 | **Posture Score** | One number, 0–100, plus a grade (A–F) for current protection posture, from five components: rules 25, enforcement 25, hygiene 20, intelligence 15, activity 15. A local summary, not a security certificate. |
 | **Guard Arena 10/10** | 10 attack scenarios (text only, never executed) run against the same runtime enforcement path on a disposable core. Results are stored and shown in the Arena tab. |
 | **Live threat intel** | Global advisories from **CISA KEV** and **NVD CVE API 2.0** (both free, no key, official), cached locally (max. 40 items), refreshed automatically every 10 minutes when the cache is older than 6 hours. Shown as global awareness — the plugin does NOT check whether this device is affected. |
-| **Loopback HUD** | Local dashboard at `http://127.0.0.1:18777` with CSRF token on all POSTs, rate limit 20 POST/IP/60 seconds (HTTP 429), and opt-in token auth (`hud_auth_token`). Dark + light themes, 15 languages, English default. |
+| **Loopback HUD** | Local dashboard at `http://127.0.0.1:18777` with Host-header check (loopback only), CSRF token on all POSTs, rate limit 20 POST/IP/60 seconds (HTTP 429), and token auth (`hud_auth_token`) — a token is generated automatically on first run when none is configured (stored in the state directory, mode 0600). The Desktop app embeds it via the SDK `SandboxedFrame`. Dark + light themes, 15 languages, English default. |
 | **Time-travel audit** | Re-checks stored runtime events and marks events that would only now be caught by the R3 mechanisms. A pattern-based audit over stored evidence — not a full replay. |
 | **15 languages** | English (default), Indonesian, Spanish, French, German, Portuguese, Italian, Russian, Turkish, Arabic, Hindi, Chinese, Japanese, Korean, Vietnamese. Rule names, advisory IDs, and CWEs are not translated. |
 | **Custom rules** | Add your own rules and override four built-in patterns, validated on load. Valid custom rules really run in the engine and appear in the HUD catalog with a "custom" badge. |
@@ -116,8 +116,10 @@ What is **not** verified yet, and therefore **not** promised:
 When the plugin runs, you will see:
 
 1. **HUD at `http://127.0.0.1:18777`** — the local dashboard showing
-   plugin status and event history. If the page cannot be opened, the
-   HUD is not running (see [Troubleshooting](#troubleshooting)).
+   plugin status and event history. It opens with a login page first
+   (token in the state directory — see [HUD hardening](#hud-hardening)).
+   If the page cannot be opened at all, the HUD is not running (see
+   [Troubleshooting](#troubleshooting)).
 2. **Events recorded** — when a rule handles an activity, one event
    appears in the HUD history and is stored in `manas_telemetry.json`
    (see [Data stored](#data-stored)).
@@ -177,8 +179,9 @@ checking.
   (telemetry, archive, STIX bundle, scan state, threat-intel cache,
   config baseline, arena + time-travel results).
 - **HUD server:** loopback-only HTTP server (`127.0.0.1:18777`,
-  `ThreadingHTTPServer`) serving the dashboard and its API. It runs
-  inside the Hermes gateway process.
+  `ThreadingHTTPServer`) serving the dashboard and its API, with a
+  Host-header check, CSRF token on POSTs, rate limit, and token login.
+  It runs inside the Hermes gateway process.
 - **Threat intel fetcher:** `threat_intel.py` fetches CISA KEV + NVD
   over HTTPS (public, no key) only for the global threat-intel panel.
 - **No LLM call, no subprocess, no credentials read, no telemetry
@@ -202,9 +205,11 @@ scope:
 
 ### Custom rules
 
-File: `~/.hermes/manas-aegis-custom-rules.json` (in your home
-directory, NOT inside the plugin directory — so your rules are not
-deleted when the plugin is reinstalled).
+File: `<hermes home>/plugin-data/hermes-manas-aegis/manas-aegis-custom-rules.json`
+(in the plugin state directory, NOT inside the plugin directory — so
+your rules are not deleted when the plugin is reinstalled; rules from
+the old `~/.hermes/manas-aegis-custom-rules.json` location are copied
+over automatically on first run).
 
 Format:
 
@@ -302,11 +307,11 @@ Status:
 | MANAS-CRED-HONEYPOT | Credential file reads (CWE-522 / CWE-73) | Arguments containing a recognized credential path (e.g. `.hermes/auth.json`, `.env`, SSH keys, `.aws/credentials`) on read operations — including inside nested dicts/lists and written as `~/...` | modify / block | experimental | Substring matching on argument text (recursive into nested dicts/lists), plus canonicalization since v2.6.0-alpha: symlinks are resolved, `~` is expanded, and reads pointing at protected files are redirected to a decoy (MANAS-SYMLINK-GUARD). Other path/encoding variations can still slip through. | Matching path and decoy destination path (when redirected) |
 | MANAS-SSRF-SINKHOLE | Requests to internal / cloud-metadata addresses (CWE-918) | `http(s)://...` URLs in tool arguments pointing at private, loopback, link-local, reserved, multicast, unspecified IPs, `localhost`, or metadata hosts | block | experimental | **Since v2.6.0-alpha a failed DNS is treated as UNSAFE (fail-closed)** — the request is blocked. Hosts in `ssrf_allowlist` are exempt. The DNS check result does not bind the next connection, and redirects are not checked. | URL and blocking reason |
 | MANAS-WEBHOOK-AUTH | Oddly shaped webhook session ID (CWE-863) | `session_id` starting with `webhook:` and containing more than 2 colon (`:`) characters | block | experimental | Only checks the **shape** of the session ID, **not webhook authentication**. A normally shaped but fake session ID is not detected. | Blocked session ID |
-| MANAS-CONFIG-FIM | Hook injection in configuration (CWE-94) | Config-hook injection text patterns in tool arguments | block | experimental | Only blocks text patterns. The config hash is now **re-compared** by quick scan against the persistent baseline (`cce_baseline.json`) — changes are reported as findings. This is still **not** real FIM (no real-time file monitoring, and deleting `cce_baseline.json` creates a new baseline from the current state). | Argument snippet (160 chars max.) |
+| MANAS-CONFIG-FIM | Hook injection in configuration (CWE-94) | Config-hook injection text patterns in tool arguments | block | experimental | Only blocks text patterns. The config fingerprint (size + mtime + inode — file contents are never read) is now **re-compared** by quick scan against the persistent baseline (`cce_baseline.json`) — changes are reported as findings. This is still **not** real FIM (no real-time file monitoring, and deleting `cce_baseline.json` creates a new baseline from the current state). | Argument snippet (160 chars max.) |
 | MANAS-MEM-FIREWALL | Directive injection into memory (CWE-74) | Directive-injection patterns in arguments of tools whose name contains `memory` | modify | experimental | Only applies to tools whose name contains "memory". Patterns outside that are untouched. | Note that the pattern was cleaned from the arguments |
 | MANAS-SYMLINK-GUARD | Symlink / TOCTOU attacks (CWE-59) | Arguments containing a path that, after resolving (symlinks, or expanded `~`), points at a recognized credential file | modify | experimental | Only applies to read operations. TOCTOU (symlink swapped after the check) is not prevented — this is not a filesystem lock. | Matching path and decoy destination path (when redirected) |
 | MANAS-SQLI-AST | SQL injection (CWE-89) | SQL injection regex patterns in tool arguments (argument text joined into one string) | block | experimental | **Not a SQL AST parser** — only pattern matching. New, unknown patterns can slip through; normal text that happens to look like a pattern can be blocked. | Argument snippet (160 chars max.) |
-| MANAS-SHELL-RCE | Destructive shell commands (CWE-78) | Destructive shell command regex patterns in tool arguments | block | experimental | Only known patterns. Since v2.6.0-alpha chained commands are split per segment and dangerous `python -c` forms are blocked by the per-segment shell parser; since v2.6.2-alpha splitting also respects `$(...)`/backticks and newlines, and `rm -rf` to any absolute path is blocked. Not a shell sandbox. | Argument snippet (160 chars max.) |
+| MANAS-SHELL-RCE | Destructive shell commands (CWE-78) | Destructive shell command regex patterns in tool arguments | block | experimental | Only known patterns. Since v2.6.0-alpha chained commands are split per segment and dangerous `python -c` forms are blocked by the per-segment shell parser; since v2.6.2-alpha splitting also respects `$(...)`/backticks and newlines, and `rm -rf` to any absolute path is blocked. Since v2.6.3-alpha the RCE pattern's lazy segments are bounded to 256 characters and the scanned length is capped at 8 KB, so a 40 KB near-miss input is checked in ~0.1 s (measured). Not a shell sandbox. | Argument snippet (160 chars max.) |
 | MANAS-CALLID-RACE | Cross-session call-ID race condition (CWE-362) | The same tool call (session + tool + same argument hash) within 10 seconds | block | experimental | Only applies to runtime calls; simulation is exempt. The 10-second window is configurable (`callid_race_window_s`). | Tool name and argument hash |
 
 Note on the numbers in the table and in the HUD: values such as CVSS,
@@ -362,16 +367,22 @@ estimate, not absolute proof. Call-ID race is not judged by this audit
 
 ### HUD hardening
 
+- **Host check** — requests whose `Host` header is not
+  `127.0.0.1:<port>` or `localhost:<port>` are rejected (HTTP 403).
+  The HUD is loopback-only.
 - **CSRF token** active on all POSTs (per-process token, sent via the
-  `X-CSRF-Token` header).
+  `X-CSRF-Token` header). The token is embedded in the HUD page only
+  after a successful login — never on an unauthenticated GET.
 - **Rate limit:** max. 20 POSTs per IP per 60 seconds (HTTP 429 when
   exceeded).
-- **Token auth (opt-in):** set `hud_auth_token` in the plugin
-  configuration to require a token before the HUD can be opened (login
-  page + 24-hour HttpOnly session cookie). **Default: off** — because
-  the HUD is loopback-only and shown inside the Desktop app as an
-  iframe, built-in auth would force a login page inside the app. Turn
-  it on if you need an extra layer.
+- **Token auth (on by default):** the HUD login page requires a token
+  (submitted once, then a 24-hour HttpOnly session cookie). If
+  `hud_auth_token` is set in the plugin configuration, that token is
+  used; otherwise a token is generated once on first run and stored in
+  the plugin state directory (`hud_auth_token.txt`, mode 0600) — the
+  login page shows the file path. The Desktop app embeds the HUD via
+  the SDK `SandboxedFrame` and reads the port from the plugin config
+  (default 18777), so the login page is reachable from the app.
 
 ## Scans: quick, full, network
 
@@ -386,7 +397,8 @@ happens.
 
 A fast check without reading your file contents:
 
-- **Config integrity** — hashes of monitored config files are compared
+- **Config integrity** — stat fingerprints (size, mtime, inode — the
+  file contents are never read) of monitored config files are compared
   against the persistent baseline (`cce_baseline.json`). A changed file
   = critical finding; a new/missing file = warning. The baseline is
   created automatically the first time the plugin runs.
@@ -410,6 +422,10 @@ All quick-scan checks, plus content scanning:
   characters (markers of hidden injection), secrets outside known
   credential files, and token-bomb heuristics (extreme token repetition
   or giant spaceless lines that could flood a model's context).
+  Credential files (`.env`, `auth.json`, `config.yaml`) are skipped
+  entirely — they are never opened, so their contents are never read;
+  their integrity is covered by the config-integrity fingerprint check
+  above.
 - This plugin's own directories are **not** scanned (they contain
   detection patterns and simulation examples — scanning them would only
   produce false positives), symlinks are not followed, and the
@@ -564,7 +580,7 @@ These options live in `plugin.yaml` (`config_schema`):
 | `ssrf_allowlist` | `[]` | Named hosts trusted by the operator; SSRF validation is skipped for them. Use hostnames only (example: `trusted.internal`). |
 | `callid_race_window_s` | `10` | Window (seconds) in which an identical runtime tool call (same session + tool + arguments hash) is hard-blocked as a duplicate. |
 | `callid_race_enabled` | `true` | Enable the duplicate-call race shield for runtime tool calls. Simulation and arena runs are always exempt. |
-| `hud_auth_token` | `""` (empty) | Optional shared secret for the loopback HUD login: when set, the HUD login page requires this token (submitted once, then a 24-hour HttpOnly session cookie). Empty means no login (loopback + CSRF + rate limit only). |
+| `hud_auth_token` | `""` (empty) | Shared secret for the loopback HUD login: when set, the HUD login page requires this token (submitted once, then a 24-hour HttpOnly session cookie). When empty, a token is generated once on first run and stored in the state directory (`hud_auth_token.txt`, mode 0600); the login page shows the file path. |
 
 Note: configuration is read when the plugin is first created. Changing
 configuration afterwards is not applied automatically until the plugin
@@ -578,11 +594,14 @@ Run the tests from the repo root:
 python3 -m unittest discover -v
 ```
 
-- **Unit + contract tests: 83/83 pass** — 61 from v2.6.0 (6 old +
-  6 R1 + 11 R2 + 5 R2.5 + 5 R2.5.1 + 5 R2.5.2 + 16 R3 + 7 contract)
-  + 22 new for the nine v2.6.2 fixes (verified 2026-11-09).
-- **Real-HTTP e2e: 26/26 pass** (`/tmp/e2e-r3.py` — CSRF 403/200,
-  arena 10/10, rate limit 429, token auth 401/302).
+- **Unit + contract tests: 94/94 pass** — 83 from v2.6.2 (61 from
+  v2.6.0 + 22 new for the nine v2.6.2 fixes, verified 2026-11-09)
+  + 11 new for the seven v2.6.3 fixes (verified 2026-11-10).
+- **Real-HTTP e2e: 17/17 pass** (`e2e-hud.py` — Host 403, login
+  401/302, CSRF 403/200, `/api/search`, `/api/stix`, Posture score,
+  rate limit 429). The old harness `/tmp/e2e-r3.py` covered 26/26
+  (CSRF 403/200, arena 10/10, rate limit 429, token auth 401/302)
+  and is superseded by `e2e-hud.py`.
 - **Coverage: 79%** (`coverage run`, CI gate 70%; core 80%, i18n 100%,
   threat_intel 86%).
 
@@ -591,9 +610,13 @@ with a 70% coverage gate (`.github/workflows/ci.yml`).
 
 ## Data stored
 
-All data is stored **locally on your computer**. No data is sent to any
-outside server by this plugin — except the threat-intel fetches
-described in [Threat intelligence](#threat-intelligence).
+All data is stored **locally on your computer**, in the plugin state
+directory `<hermes home>/plugin-data/hermes-manas-aegis/` (state from
+the old `~/.hermes/plugins/hermes-manas-aegis/` location is copied
+there automatically on first run; the old files are left in place).
+No data is sent to any outside server by this plugin — except the
+threat-intel fetches described in
+[Threat intelligence](#threat-intelligence).
 
 | Data | Contents | Limit |
 |---|---|---|
@@ -602,8 +625,9 @@ described in [Threat intelligence](#threat-intelligence).
 | `stix21_taxii_feed.json` | Local STIX 2.1 bundle of the same events (last 30 bundles) — this is a local file, **not** a live TAXII feed and there is no TAXII transport | Last 30 bundles |
 | `scan_state.json` | Last scan result + finding list (max. 50 findings, duplicates merged) | 50 findings |
 | `threat_intel.json` | Global threat-intel cache (CISA KEV + NVD, max. 40 items) + per-source status | 40 items, refreshed when older than 6 hours |
-| `cce_baseline.json` | Baseline hash of monitored config files (for quick scan) | Created automatically on first run; delete this file to create a new baseline |
-| `~/.hermes/manas-aegis-custom-rules.json` | Your custom rules (in home, not in the plugin directory) | No limit on the number of rules; invalid entries are rejected |
+| `cce_baseline.json` | Baseline stat fingerprint (size + mtime + inode) of monitored config files (for quick scan) | Created automatically on first run; delete this file to create a new baseline |
+| `manas-aegis-custom-rules.json` | Your custom rules (in the plugin state directory, not in the plugin directory; migrated automatically from the old `~/.hermes/manas-aegis-custom-rules.json`) | No limit on the number of rules; invalid entries are rejected |
+| `hud_auth_token.txt` | Auto-generated HUD login token (only when `hud_auth_token` is not configured) | Mode 0600; delete this file to generate a new token on next start (old sessions stop working) |
 
 What you should know about privacy:
 
@@ -618,11 +642,12 @@ What you should know about privacy:
   without checking its contents. `session_id` and tool names are still
   stored as-is.
 - The HUD runs on loopback (`127.0.0.1`) so it cannot be reached from
-  outside the network. HUD endpoints **use a per-process CSRF token on
-  all POSTs, rate limit 20 POSTs per IP per 60 seconds (HTTP 429), and
-  opt-in token auth** (`hud_auth_token`); but there is **no Origin
-  header check**. Anyone who can access your computer can open the HUD
-  and call its endpoints.
+  outside the network. HUD endpoints **use a Host-header check
+  (loopback only), a per-process CSRF token on all POSTs, rate limit
+  20 POSTs per IP per 60 seconds (HTTP 429), and token auth**
+  (auto-generated `hud_auth_token` by default, or set your own); but
+  there is **no Origin header check**. Anyone who can access your
+  computer can open the HUD and call its endpoints.
 - Decoy files (`honeypot_sandbox/decoy.env`,
   `honeypot_sandbox/decoy_auth.json`) contain **fake bait data** that is
   deliberately easy to recognize — not real credentials.
@@ -632,6 +657,7 @@ What you should know about privacy:
 | Symptom | Likely cause | What you can do |
 |---|---|---|
 | HUD cannot be opened at `127.0.0.1:18777` | HUD failed to start, or the port is already used by another process | Check whether the plugin is active; try another port via `hud_port`; check whether another process uses port 18777. If the HUD still does not run, the plugin can still check tools — the HUD is only its display. |
+| HUD shows a login page | Since v2.6.3-alpha the HUD always requires a login | The token is in `<hermes home>/plugin-data/hermes-manas-aegis/hud_auth_token.txt` (or the configured `hud_auth_token` in the plugin configuration). Enter it once; the session lasts 24 hours. |
 | Plugin does not seem to handle anything | Hook not registered (hook registration is conditional, depending on which methods the Hermes runtime provides), or no activity matched a pattern yet | Run `hermes plugins validate` on the plugin directory; check your Hermes version (see below). |
 | Normal tools get blocked too | Argument text happens to match a pattern (false positive — regex patterns can be wrong) | Temporarily turn off the related rule (`git_rce_synthesis` / `ssrf_dns_firewall` to `false`) or disable the plugin, then report the example (see SECURITY.md / CONTRIBUTING.md). |
 | Dangerous command gets through | The pattern does not recognize it yet (see the "Limits" column in the guard table) | That is a known limitation. Do not rely on the plugin for that command; report it as a finding (see SECURITY.md). |
@@ -650,7 +676,8 @@ To remove the plugin completely:
 
 3. Delete state files (if any) — local telemetry
    `manas_telemetry.json` and the local feed
-   `stix21_taxii_feed.json` in the plugin state directory.
+   `stix21_taxii_feed.json` in the plugin state directory
+   (`<hermes home>/plugin-data/hermes-manas-aegis/`).
 4. Restart Hermes.
 
 The plugin makes no other system changes, so deleting the directory +
@@ -662,11 +689,12 @@ installed.
 - **Hermes 0.21.5 — tested on PC.** `hermes plugins validate` passes
   partially; `hermes plugins doctor` fails on the `parameters` kwarg
   (core hooks still run). Unit + contract tests in this rev1 working
-  copy: **83/83 pass** (`python3 -m unittest discover`, verified
-  2026-11-09) — 61 tests from v2.6.0 (6 old + 6 R1 + 11 R2 + 5 R2.5 +
-  5 R2.5.1 + 5 R2.5.2 + 16 R3 + 7 contract) + 22 new tests for the nine
-  v2.6.2 fixes. Real-HTTP e2e: **26/26 pass** (`/tmp/e2e-r3.py` — CSRF
-  403/200, arena 10/10, rate limit 429, token auth 401/302). Coverage:
+  copy: **94/94 pass** (`python3 -m unittest discover`, verified
+  2026-11-10) — 83 tests from v2.6.2 (61 from v2.6.0 + 22 new for the
+  nine v2.6.2 fixes) + 11 new tests for the seven v2.6.3 fixes.
+  Real-HTTP e2e: **17/17 pass** (`e2e-hud.py` — Host 403, login
+  401/302, CSRF 403/200, `/api/search`, `/api/stix`, Posture score,
+  rate limit 429). Coverage:
   **79%** (`coverage run`, CI gate 70%). Known bypasses in v2.5.2 (git
   chaining, `python -c`, SSRF fail-open) were **already fixed in
   v2.6.0** (shell parser, SSRF fail-closed); packaging (wheel/sdist
