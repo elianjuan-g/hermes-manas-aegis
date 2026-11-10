@@ -1,5 +1,5 @@
 name: hermes-manas-aegis
-version: 2.6.4
+version: 2.6.5
 description: "[ALPHA] Experimental Hermes guardrail (prototype, not standalone security): pattern-based pre-tool checks that can block or rewrite some risky tool arguments, with local telemetry and a loopback HUD. Opt-in, test environments only — see README.md for limits."
 author: "Alianza Meridian Corp"
 license: "MIT"

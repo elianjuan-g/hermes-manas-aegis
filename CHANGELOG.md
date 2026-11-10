@@ -5,6 +5,13 @@ loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use `MAJOR.MINOR.PATCH` + the `-alpha` label while the
 plugin is still a prototype.
 
+## [2.6.5-alpha] — 2026-11-10
+
+Resolve catalog review item 7 (teknium1): detection constants are now
+plain raw-string literals instead of Base64. `PROTECTED_FILES` and
+`SAFE_GIT_PREFIX` are plain values, and the barrage-simulation vectors
+moved into `fixtures/vectors.json` so reviewers and users can read them.
+
 ## [2.6.4-alpha] — 2026-11-10
 
 Load failure on real Hermes 0.21.5, found by a live-discovery test (the
