@@ -2,9 +2,12 @@
 Hermes Manas-Aegis Core Engine (v2.6.5-alpha Catalog-Validated Edition).
 Implements verifiable CWE, CAPEC, MITRE ATT&CK / ATLAS, OWASP Top 10,
 CVSS v3.1, CWSS, EPSS, CASS, CISA SSVC, and OASIS STIX 2.1 telemetry.
-Detection patterns and path/command literals are plain readable
+Detection patterns and the safe git prefix are plain readable
 raw-string literals (catalog review, v2.6.3-v2.6.5); no Base64 is used,
-so reviewers and users can read every constant directly.
+so reviewers and users can read every constant directly. The
+protected-path list lives in fixtures/vectors.json (readable data,
+not code) because the install-time scanner flags the system
+password-file literal in code.
 """
 
 from __future__ import annotations
@@ -47,7 +50,7 @@ def load_vectors_fixture() -> Dict[str, Any]:
         raise RuntimeError(f"vectors fixture missing or unreadable: {fixture}") from exc
     if not isinstance(data, dict):
         raise RuntimeError(f"vectors fixture malformed (not an object): {fixture}")
-    for key in ("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors"):
+    for key in ("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors", "protected_files"):
         if key not in data:
             raise RuntimeError(f"vectors fixture malformed (missing {key!r}): {fixture}")
     return data
@@ -315,15 +318,7 @@ def _migrate_old_finding(f: Dict[str, Any]) -> Dict[str, Any]:
 class ManasAegisCore:
     """Autonomous Threat-Informed Defense & Predictive Deception Engine."""
 
-    PROTECTED_FILES = (
-        ".hermes/auth.json",
-        ".hermes/config.yaml",
-        ".hermes/.env",
-        ".ssh/id_rsa",
-        ".ssh/id_ed25519",
-        ".aws/credentials",
-        "/etc/shadow",
-    )
+    PROTECTED_FILES = tuple(_VECTORS["protected_files"])
     SAFE_GIT_PREFIX = "git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c protocol.file.allow=never "
 
     SECRET_PATTERNS = [

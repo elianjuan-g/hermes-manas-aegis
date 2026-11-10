@@ -1622,8 +1622,16 @@ class TestManasAegisR265Item7(unittest.TestCase):
             / "core_engine.py"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            '("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors")',
+            '("arena_scenarios", "py_dangerous_tokens", "test_payloads", "barrage_vectors", "protected_files")',
             src,
+        )
+
+    def test_protected_files_from_fixture(self) -> None:
+        self.assertIn("protected_files", _TEST_VECTORS)
+        self.assertEqual(len(_TEST_VECTORS["protected_files"]), 7)
+        self.assertEqual(
+            ManasAegisCore.PROTECTED_FILES,
+            tuple(_TEST_VECTORS["protected_files"]),
         )
 
     def test_barrage_simulation_returns_six(self) -> None:
