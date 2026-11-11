@@ -5,6 +5,42 @@ loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use `MAJOR.MINOR.PATCH` + the `-alpha` label while the
 plugin is still a prototype.
 
+## [2.6.6-alpha] — 2026-11-11
+
+Second catalog review (teknium1, CHANGES_REQUESTED on v2.6.4 code):
+the first review's 7 items are confirmed fixed, including the
+register_tool fix. Four new items, fixed on top of v2.6.5:
+
+- **Settings are now read (item 1).** `register()` reads every
+  `config_schema` key through the public `ctx.get_config(key,
+  default)` reader (the old `getattr(ctx, "config", {})` never
+  worked — the context has no `config` attribute). A defensive
+  fallback keeps old/mock contexts working. `auto_launch_hud_server:
+  false` now really keeps the HUD server and its threat-intel
+  refresh thread from starting (the `on_session_start` hook was
+  launching them unconditionally); a custom `hud_port` flows to the
+  server and the Desktop page.
+- **Regex cost bounded on long input (item 2).** The 8 KB scan cap
+  now also covers the per-segment pass and the XSS scrubber step
+  (both previously scanned uncapped input). Open quantifiers are
+  bounded exactly as reviewed: `[a-zA-Z]{0,16}` in the `rm` flag
+  alternatives, `[^|;]{0,512}` after `curl|wget`, `[^>]{0,256}` and
+  `.{0,4096}?` in `XSS_PATTERN`. Three new 40 KB timing inputs
+  (`rm -` + long `r` run, many `curl ` tokens, many unclosed
+  `<script>` tags) each complete in under 1.0 s.
+- **Profiles (item 3).** The three hardcoded `Path.home() /
+  ".hermes"` sites in `core_engine` now use
+  `hermes_constants.get_hermes_home()` (guarded import with a home
+  fallback), so the integrity monitor, the full scan and the arena
+  decoy follow the active profile. The full scan no longer walks
+  into `profiles/`.
+- **Full scan keeps away from secret stores (item 4).** The scan
+  skips `webhook_subscriptions.json`, anything under `mcp-tokens/`,
+  and `auth.json.bak` / `.env.bak` / `config.yaml.bak` — those files
+  are never opened. (The `__init__.py` home paths are unchanged on
+  purpose: one is the documented last-resort fallback, the other two
+  are the legacy-state migration, which must read the old home.)
+
 ## [2.6.5-alpha] — 2026-11-10
 
 Resolve catalog review item 7 (teknium1): detection constants are now

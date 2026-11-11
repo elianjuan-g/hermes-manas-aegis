@@ -1262,8 +1262,18 @@ def on_session_start_hook(session_id: str = "default", platform: str = "cli", **
     is_remote = any(k in session_id.lower() or k in platform.lower() for k in ("webhook", "group", "matrix", "telegram", "discord"))
     core.session_cass[session_id] = 1.75 if is_remote else 1.20
     hud_file = write_hud_snapshot(core)
-    url = ensure_hud_server_running(int(core.config.get("hud_port", 18777)))
-    return {"status": "MANAS_CORE_ENGAGED", "live_hud_url": url, "hud_file": str(hud_file), "hud_ok": bool(_SERVER_OK)}
+    # v2.6.6 (catalog review item 1): auto_launch_hud_server: false
+    # must keep the HUD server AND its threat-intel refresh thread
+    # from starting. ensure_hud_server_running starts both, so the
+    # gate lives here (register() already gates its own call). An
+    # explicit /manas-hud tool call still starts the server on demand.
+    if core.config.get("auto_launch_hud_server", True):
+        url = ensure_hud_server_running(int(core.config.get("hud_port", 18777)))
+        hud_ok = bool(_SERVER_OK)
+    else:
+        url = ""
+        hud_ok = False
+    return {"status": "MANAS_CORE_ENGAGED", "live_hud_url": url, "hud_file": str(hud_file), "hud_ok": hud_ok}
 
 
 def pre_llm_call_hook(messages: Any = None, session_id: str = "default", **kwargs: Any) -> Optional[Dict[str, Any]]:
@@ -1385,9 +1395,50 @@ def tool_manas_stix_intelligence_handler(args: Any = None, **kwargs: Any) -> str
     return tool_manas_stix_intelligence(view=args.get("view", "stix_feed"))
 
 
+def _default_plugin_config() -> Dict[str, Any]:
+    """config_schema defaults from plugin.yaml (fresh dict per call)."""
+    return {
+        "tactical_doctrine": "counter_deceive",
+        "auto_launch_hud_server": True,
+        "hud_port": 18777,
+        "git_rce_synthesis": True,
+        "ssrf_dns_firewall": True,
+        "taint_ttl_minutes": 60,
+        "ssrf_allowlist": [],
+        "callid_race_window_s": 10,
+        "callid_race_enabled": True,
+        "hud_auth_token": "",
+    }
+
+
+def _read_plugin_config(ctx: Any) -> Dict[str, Any]:
+    """Read every config_schema key through the public reader.
+
+    v2.6.6 (catalog review item 1): ``getattr(ctx, "config", {})``
+    never worked — the plugin context has no ``config`` attribute, so
+    every setting was silently ignored. The public reader is
+    ``ctx.get_config("<key>", default)`` (Hermes 0.21.5,
+    PluginContext). Defensive: an old/mock context without
+    get_config falls back to a legacy ``config`` dict, then to the
+    plugin.yaml defaults, so the validator's mock context never
+    crashes register().
+    """
+    defaults = _default_plugin_config()
+    get_config = getattr(ctx, "get_config", None)
+    if callable(get_config):
+        try:
+            return {k: get_config(k, v) for k, v in defaults.items()}
+        except Exception:
+            pass
+    legacy = getattr(ctx, "config", None)
+    if isinstance(legacy, dict):
+        return {k: legacy.get(k, v) for k, v in defaults.items()}
+    return defaults
+
+
 def register(ctx: Any) -> None:
     """Official Hermes Plugin Entrypoint (`hermes_manas_aegis:register`)."""
-    cfg = getattr(ctx, "config", {}) if hasattr(ctx, "config") else {}
+    cfg = _read_plugin_config(ctx)
     core = get_core(cfg)
     write_hud_snapshot(core)
     if core.config.get("auto_launch_hud_server", True):

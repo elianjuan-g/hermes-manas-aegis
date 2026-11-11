@@ -1,5 +1,5 @@
 """
-Hermes Manas-Aegis Core Engine (v2.6.5-alpha Catalog-Validated Edition).
+Hermes Manas-Aegis Core Engine (v2.6.6-alpha Catalog-Validated Edition).
 Implements verifiable CWE, CAPEC, MITRE ATT&CK / ATLAS, OWASP Top 10,
 CVSS v3.1, CWSS, EPSS, CASS, CISA SSVC, and OASIS STIX 2.1 telemetry.
 Detection patterns and the safe git prefix are plain readable
@@ -315,6 +315,24 @@ def _migrate_old_finding(f: Dict[str, Any]) -> Dict[str, Any]:
     return f
 
 
+def _hermes_home() -> Path:
+    """Active Hermes home directory (v2.6.6, catalog review item 3).
+
+    Prefers the public ``hermes_constants.get_hermes_home()`` so the
+    integrity monitor, the full scan and the arena decoy follow the
+    active profile (and HERMES_HOME), instead of a hardcoded home
+    path. Falls back to the home directory when Hermes is not
+    importable (standalone tests). Resolved fresh on every call so a
+    profile switch is followed; nothing is cached.
+    """
+    try:
+        from hermes_constants import get_hermes_home
+
+        return get_hermes_home()
+    except Exception:
+        return Path.home() / ".hermes"
+
+
 class ManasAegisCore:
     """Autonomous Threat-Informed Defense & Predictive Deception Engine."""
 
@@ -330,10 +348,10 @@ class ManasAegisCore:
     ]
 
     SQLI_PATTERN = re.compile(r"(?i)(?:\bUNION\s+(?:ALL\s+)?SELECT\b|\bOR\s+['\"]?1['\"]?\s*=\s*['\"]?1\b|;\s*(?:DROP|ALTER|TRUNCATE|ATTACH)\s+(?:TABLE|DATABASE)\b|\bLOAD_EXTENSION\s*\()")
-    RCE_PATTERN = re.compile(r"(?i)(?:\b(?:bash|sh|zsh|nc|ncat)\s+-i\s+>&\s*/dev/tcp/|\b(?:curl|wget)\b[^|;]*\|\s*(?:ba)?sh\b|\bpython3?\s+-c\s+['\"][^\n]{0,256}?\bsocket\b[^\n]{0,256}?\bsubprocess\b|\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*|-[a-zA-Z]*r[a-zA-Z]*\s+-[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*\s+-[a-zA-Z]*r[a-zA-Z]*|(?:--recursive\s+--force|--force\s+--recursive))(?:\s+(?:-[a-zA-Z]+|--no-preserve-root|--recursive|--force))*\s+/|\b(?:eval|(?:ba)?sh)\b\s+(?:\$\(|`)\s*(?:curl|wget)\b)")
+    RCE_PATTERN = re.compile(r"(?i)(?:\b(?:bash|sh|zsh|nc|ncat)\s+-i\s+>&\s*/dev/tcp/|\b(?:curl|wget)\b[^|;]{0,512}\|\s*(?:ba)?sh\b|\bpython3?\s+-c\s+['\"][^\n]{0,256}?\bsocket\b[^\n]{0,256}?\bsubprocess\b|\brm\s+(?:-[a-zA-Z]{0,16}r[a-zA-Z]{0,16}f[a-zA-Z]{0,16}|-[a-zA-Z]{0,16}f[a-zA-Z]{0,16}r[a-zA-Z]{0,16}|-[a-zA-Z]{0,16}r[a-zA-Z]{0,16}\s+-[a-zA-Z]{0,16}f[a-zA-Z]{0,16}|-[a-zA-Z]{0,16}f[a-zA-Z]{0,16}\s+-[a-zA-Z]{0,16}r[a-zA-Z]{0,16}|(?:--recursive\s+--force|--force\s+--recursive))(?:\s+(?:-[a-zA-Z]+|--no-preserve-root|--recursive|--force))*\s+/|\b(?:eval|(?:ba)?sh)\b\s+(?:\$\(|`)\s*(?:curl|wget)\b)")
     CONFIG_HOOK_POISON = re.compile(r"(?i)(?:hooks_auto_accept\s*:\s*true|post_llm_call\s*:|pre_tool_call\s*:)")
     MEMORY_DIRECTIVE_POISON = re.compile(r"(?i)(?:ignore\s+all\s+previous\s+instructions|system\s+prompt\s+override|disregard\s+security\s+guard|[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]{2,})")
-    XSS_PATTERN = re.compile(r"(?i)(?:<script\b[^>]*>.*?</script>|\bon(?:error|load|mouseover)\s*=\s*['\"][^'\"]+['\"])")
+    XSS_PATTERN = re.compile(r"(?i)(?:<script\b[^>]{0,256}>.{0,4096}?</script>|\bon(?:error|load|mouseover)\s*=\s*['\"][^'\"]+['\"])")
 
     def __init__(self, state_dir: Path, config: Optional[Dict[str, Any]] = None) -> None:
         self._lock = threading.RLock()
@@ -618,7 +636,7 @@ class ManasAegisCore:
         only — size, mtime_ns, inode — via os.stat. The file CONTENTS
         (which may hold credentials) are never opened or read here.
         """
-        hermes_dir = Path.home() / ".hermes"
+        hermes_dir = _hermes_home()
         current: Dict[str, str] = {}
         for fname in ("config.yaml", "auth.json", ".env"):
             f = hermes_dir / fname
@@ -1129,7 +1147,14 @@ class ManasAegisCore:
     # not scanned by these patterns (the duplicate-call hash and the
     # evidence snippet still use the full text).
     _SCAN_MAX_CHARS = 8192
-    _SCAN_SKIP_DIRS = {".git", "node_modules", "__pycache__", "honeypot_sandbox"}
+    _SCAN_SKIP_DIRS = {".git", "node_modules", "__pycache__", "honeypot_sandbox", "profiles", "mcp-tokens"}
+    # v2.6.6 (catalog review item 4): the full scan never opens these
+    # files — webhook_subscriptions.json holds webhook signing secrets,
+    # mcp-tokens/ holds tokens, and *.bak are credential backups. The
+    # three cce names (config.yaml, auth.json, .env) are skipped
+    # separately above; "profiles/" is skipped as a directory (item 3)
+    # so other profiles' data is never walked either.
+    _SCAN_SKIP_FILES = {"webhook_subscriptions.json", "auth.json.bak", ".env.bak", "config.yaml.bak"}
     _TOKEN_BOMB_REPEAT = re.compile(r"(\S{1,10})\1{50,}")
 
     def _scan_now(self) -> str:
@@ -1296,7 +1321,7 @@ class ManasAegisCore:
         return summary
 
     def _scan_filesystem(self, findings: List[Dict[str, Any]], add) -> None:
-        root = Path.home() / ".hermes"
+        root = _hermes_home()
         if not root.exists():
             return
         plugin_dir = root / "plugins" / "hermes-manas-aegis"
@@ -1319,6 +1344,11 @@ class ManasAegisCore:
                     # scan their contents. Their integrity is tracked
                     # separately by os.stat fingerprints (config_integrity).
                     if fpath.name in cce_files:
+                        continue
+                    # v2.6.6 (catalog review item 4): secret stores are
+                    # never opened here at all (same treatment as the
+                    # cce files above).
+                    if fpath.name in self._SCAN_SKIP_FILES:
                         continue
                     if str(fpath).startswith(str(plugin_dir)):
                         continue
@@ -1371,7 +1401,7 @@ class ManasAegisCore:
         simulation_events = sum(1 for e in self.events if e.get("source") == "simulation")
         custom_rules = list(getattr(self, "custom_rules", []) or [])
         return {
-            "codename": "MANAS-AEGIS CORE v2.6.5-alpha",
+            "codename": "MANAS-AEGIS CORE v2.6.6-alpha",
             "alpha": True,
             "doctrine": self.config.get("tactical_doctrine", "counter_deceive").upper(),
             "cpe_23": f"cpe:2.3:a:nousresearch:hermes-agent:{hermes_ver}:*:*:*:*:*:*:*",
@@ -1746,7 +1776,15 @@ class ManasAegisCore:
                             if part in self._SHELL_SEPARATORS:
                                 out_parts.append(part)
                                 continue
-                            if self._python_c_dangerous(part):
+                            # v2.6.6 (catalog review item 2): the 8 KB
+                            # scan cap also covers this per-segment pass
+                            # — a 40 KB single segment must not reach
+                            # the regexes uncapped (same trade-off as
+                            # the main scan: a payload past 8 KB is not
+                            # scanned here). The full part is kept for
+                            # the git rewrite below.
+                            scan_part = part[: self._SCAN_MAX_CHARS]
+                            if self._python_c_dangerous(scan_part):
                                 spec = THREAT_MATRIX["MANAS-SHELL-RCE"]
                                 score, ssvc = self.compute_risk_and_ssvc(spec, cass)
                                 self._log_stix_event(spec, session_id, tool_name, f"Blocked python -c payload: {part[:110]}", cass, score, ssvc, "HARD_BLOCK", source=event_source)
@@ -1754,7 +1792,7 @@ class ManasAegisCore:
                                     "action": "block",
                                     "message": f"《 MANAS-AEGIS | SSVC:{ssvc} | Risk:{score}/100 》 Neutralized {spec.advisory_id} ({spec.cwe_id}): python -c payload blocked.",
                                 }
-                            if self.RCE_PATTERN.search(part):
+                            if self.RCE_PATTERN.search(scan_part):
                                 spec = THREAT_MATRIX["MANAS-SHELL-RCE"]
                                 score, ssvc = self.compute_risk_and_ssvc(spec, cass)
                                 self._log_stix_event(spec, session_id, tool_name, f"Blocked destructive segment: {part[:110]}", cass, score, ssvc, "HARD_BLOCK", source=event_source)
@@ -1872,9 +1910,15 @@ class ManasAegisCore:
             if found:
                 count += len(found)
                 out = pat.sub(f"《MANAS-DLP-REDACTED:{label}》", out)
-        if self.XSS_PATTERN.search(out):
+        # v2.6.6 (catalog review item 2): the 8 KB scan cap also covers
+        # this step — it runs on every tool result, including fetched
+        # web pages. Only the first 8 KB is searched and scrubbed; the
+        # tail passes through untouched (same trade-off as the main
+        # scan: content past 8 KB is not scrubbed here).
+        head = out[: self._SCAN_MAX_CHARS]
+        if self.XSS_PATTERN.search(head):
             count += 1
-            out = self.XSS_PATTERN.sub("《MANAS-XSS-NEUTRALIZED》", out)
+            out = self.XSS_PATTERN.sub("《MANAS-XSS-NEUTRALIZED》", head) + out[self._SCAN_MAX_CHARS:]
         return out, count
 
     def _log_stix_event(
@@ -2000,7 +2044,7 @@ class ManasAegisCore:
                 if sc.get("setup") == "symlink":
                     link = Path(d) / "arena-link"
                     try:
-                        link.symlink_to(Path.home() / ".hermes" / "auth.json")
+                        link.symlink_to(_hermes_home() / "auth.json")
                     except Exception:
                         link = Path(d) / "arena-link"
                     steps = [
